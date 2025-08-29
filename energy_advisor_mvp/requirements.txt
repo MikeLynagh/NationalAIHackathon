@@ -1,0 +1,28 @@
+# Energy Advisor MVP - Dependencies
+# Core Framework
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+plotly>=5.15.0
+
+# Data Processing
+openpyxl>=3.1.0  # For Excel reading
+python-dateutil>=2.8.0
+
+# AI Integration
+openai>=1.0.0  # For GPT-4 API integration
+anthropic>=0.7.0  # For Claude API integration (alternative)
+python-dotenv>=1.0.0  # For environment variable management
+requests>=2.31.0  # For API calls
+
+# Machine Learning & Analysis
+scikit-learn>=1.3.0  # For ML clustering and pattern recognition
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Code Quality
+black>=23.0.0
+flake8>=6.0.0
+pylint>=2.17.0 
