@@ -25,7 +25,7 @@ class MPRNDataParser:
             'Read Type', 'Read Date and End Time'
         ]
         self.expected_read_types = [
-            'Active Import Interval (kW)', 'Active Export Interval (kW)'
+            'Active Import Interval (kW)'  # Only care about Import data
         ]
     
     def parse_mprn_file(self, uploaded_file) -> pd.DataFrame:
@@ -87,11 +87,12 @@ class MPRNDataParser:
             except:
                 errors.append("Cannot convert 'Read Value' to numeric")
         
-        # Check read types
+        # Check read types - be more flexible, just ensure we have Import data
         if 'Read Type' in df.columns:
-            invalid_types = set(df['Read Type'].unique()) - set(self.expected_read_types)
-            if invalid_types:
-                errors.append(f"Unexpected read types: {invalid_types}")
+            read_types = set(df['Read Type'].unique())
+            if 'Active Import Interval (kW)' not in read_types:
+                errors.append("No Import data found - 'Active Import Interval (kW)' is required")
+            # Don't reject Export data, we'll just ignore it later
         
         # Check date format
         if 'Read Date and End Time' in df.columns:
@@ -159,30 +160,33 @@ class MPRNDataParser:
         return df_filled
     
     def _pivot_import_export(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Pivot data to separate import and export columns by timestamp."""
-        # Create pivot table
-        pivot_df = df.pivot_table(
-            index='Read Date and End Time',
-            columns='Read Type',
-            values='Read Value',
-            aggfunc='first'
-        )
+        """Process only Import data, ignoring Export data."""
+        # Filter to only Import data
+        import_df = df[df['Read Type'] == 'Active Import Interval (kW)'].copy()
         
-        # Rename columns for clarity
-        pivot_df.columns = ['import_kw', 'export_kw']
+        if import_df.empty:
+            raise ValueError("No Import data found in the file")
         
-        # Fill NaN values with 0
-        pivot_df = pivot_df.fillna(0)
+        # Create clean DataFrame with just Import data
+        clean_df = pd.DataFrame({
+            'timestamp': import_df['Read Date and End Time'],
+            'import_kw': import_df['Read Value']
+        })
         
-        # Reset index to make timestamp a column
-        pivot_df = pivot_df.reset_index()
+        # Ensure timestamp is datetime
+        clean_df['timestamp'] = pd.to_datetime(clean_df['timestamp'], dayfirst=True)
         
-        return pivot_df
+        # Sort by timestamp
+        clean_df = clean_df.sort_values('timestamp')
+        
+        logger.info(f"Processed {len(clean_df)} Import records")
+        
+        return clean_df
     
     def _resample_to_30min(self, df: pd.DataFrame) -> pd.DataFrame:
         """Resample data to ensure 30-minute intervals."""
         # Set timestamp as index
-        df_indexed = df.set_index('Read Date and End Time')
+        df_indexed = df.set_index('timestamp')
         
         # Resample to 30-minute intervals
         df_resampled = df_indexed.resample('30T').asfreq()
@@ -198,7 +202,7 @@ class MPRNDataParser:
         df_filled = df.copy()
         
         # Calculate time differences
-        time_diffs = df_filled['Read Date and End Time'].diff()
+        time_diffs = df_filled['timestamp'].diff()
         
         # Flag large gaps (>2 hours)
         large_gaps = time_diffs > timedelta(hours=2)
