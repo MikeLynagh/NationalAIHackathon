@@ -12,6 +12,7 @@ import logging
 from datetime import datetime
 import sys
 import os
+from typing import Dict
 
 # Add src directory to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__)))
@@ -23,6 +24,7 @@ from data_parser import (
     clean_and_resample,
 )
 from usage_analyzer import UsageAnalyzer
+from tariff_engine import calculate_simple_cost, calculate_time_based_cost
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +50,7 @@ def main():
         [
             "📊 Data Upload & Analysis",
             "💰 Usage Patterns",
+            "💰 Cost Analysis",
             "🔍 Appliance Detection",
             "💡 Recommendations",
         ],
@@ -57,6 +60,8 @@ def main():
         show_data_upload_page()
     elif page == "💰 Usage Patterns":
         show_usage_patterns_page()
+    elif page == "💰 Cost Analysis":
+        show_cost_analysis_page()
     elif page == "🔍 Appliance Detection":
         show_appliance_detection_page()
     elif page == "💡 Recommendations":
@@ -489,6 +494,234 @@ def show_usage_patterns_page():
         st.error(f"❌ Required columns not found for pattern analysis.")
         st.write(f"**Available columns:** {list(df.columns)}")
         st.write(f"**Looking for:** timestamp and import_kw")
+
+
+def show_cost_analysis_page():
+    """Cost analysis page with tariff calculations"""
+    st.header("💰 Cost Analysis")
+
+    if "parsed_data" not in st.session_state:
+        st.warning("⚠️ Please upload data first on the Data Upload page.")
+        return
+
+    df = st.session_state["parsed_data"]
+
+    if df is None or df.empty:
+        st.error("❌ No data available for cost analysis.")
+        return
+
+    # Rate input section
+    st.subheader("⚡ Enter Your Electricity Rate")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown(
+            """
+        **Simple Rate Input**
+        
+        Enter your current electricity rate to see how much your usage costs.
+        You can find this on your energy bill.
+        """
+        )
+
+        rate_per_kwh = st.number_input(
+            "Rate per kWh (€):",
+            min_value=0.01,
+            max_value=1.00,
+            value=0.23,
+            step=0.01,
+            help="Enter your electricity rate in euros per kWh (e.g., 0.23 for €0.23/kWh)",
+        )
+
+    with col2:
+        st.markdown(
+            """
+        **Advanced Options**
+        
+        For more accurate calculations, you can specify different rates for different times.
+        """
+        )
+
+        use_time_based = st.checkbox("Use time-based rates (Day/Night/Peak)")
+
+        if use_time_based:
+            day_rate = st.number_input("Day Rate (€/kWh):", value=0.25, step=0.01)
+            night_rate = st.number_input("Night Rate (€/kWh):", value=0.18, step=0.01)
+            peak_rate = st.number_input("Peak Rate (€/kWh):", value=0.30, step=0.01)
+
+    # Calculate costs
+    if st.button("💰 Calculate Costs", type="primary"):
+        with st.spinner("Calculating costs..."):
+            if use_time_based:
+                cost_breakdown = calculate_time_based_cost(
+                    df, day_rate, night_rate, peak_rate
+                )
+            else:
+                cost_breakdown = calculate_simple_cost(df, rate_per_kwh)
+
+            if cost_breakdown:
+                st.success("✅ Cost calculation completed!")
+                show_cost_results(cost_breakdown, df)
+            else:
+                st.error("❌ Failed to calculate costs. Please check your data.")
+
+
+def show_cost_results(cost_breakdown: Dict, df: pd.DataFrame):
+    """Display cost analysis results"""
+    st.subheader("📊 Cost Breakdown")
+
+    # Summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric(
+            "Total Energy",
+            f"{cost_breakdown['total_energy_kwh']} kWh",
+            help="Total energy consumption in the period",
+        )
+
+    with col2:
+        st.metric(
+            "Total Cost",
+            f"€{cost_breakdown['total_cost_euros']}",
+            help="Total cost for the period",
+        )
+
+    with col3:
+        daily_cost = cost_breakdown.get("daily_average", {}).get("cost_euros", 0)
+        st.metric("Daily Average", f"€{daily_cost}", help="Average daily cost")
+
+    with col4:
+        monthly_cost = cost_breakdown.get("monthly_projection", {}).get("cost_euros", 0)
+        st.metric(
+            "Monthly Projection",
+            f"€{monthly_cost}",
+            help="Projected monthly cost based on current usage",
+        )
+
+    # Time period breakdown
+    st.subheader("⏰ Cost by Time Period")
+
+    if "time_periods" in cost_breakdown:
+        time_periods = cost_breakdown["time_periods"]
+
+        # Create a DataFrame for better display
+        period_data = []
+        for period, data in time_periods.items():
+            period_data.append(
+                {
+                    "Time Period": period.title(),
+                    "Energy (kWh)": data["energy_kwh"],
+                    "Cost (€)": data["cost_euros"],
+                    "Percentage": f"{data['percentage']}%",
+                }
+            )
+
+        period_df = pd.DataFrame(period_data)
+        st.dataframe(period_df, width="stretch")
+
+        # Visual breakdown
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Energy breakdown pie chart
+            energy_values = [data["energy_kwh"] for data in time_periods.values()]
+            energy_labels = [period.title() for period in time_periods.keys()]
+
+            import plotly.express as px
+
+            fig_energy = px.pie(
+                values=energy_values,
+                names=energy_labels,
+                title="Energy Usage by Time Period",
+            )
+            st.plotly_chart(fig_energy, width="stretch")
+
+        with col2:
+            # Cost breakdown pie chart
+            cost_values = [data["cost_euros"] for data in time_periods.values()]
+            cost_labels = [period.title() for period in time_periods.keys()]
+
+            fig_cost = px.pie(
+                values=cost_values,
+                names=cost_labels,
+                title="Cost Breakdown by Time Period",
+            )
+            st.plotly_chart(fig_cost, width="stretch")
+
+    # Savings opportunities
+    if (
+        "savings_opportunities" in cost_breakdown
+        and cost_breakdown["savings_opportunities"]
+    ):
+        st.subheader("💡 Potential Savings Opportunities")
+
+        for i, opportunity in enumerate(cost_breakdown["savings_opportunities"]):
+            with st.expander(
+                f"💰 {opportunity['type']} - Save €{opportunity['potential_savings']}"
+            ):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.write(f"**Description:** {opportunity['description']}")
+                    st.write(f"**Difficulty:** {opportunity['difficulty']}")
+
+                with col2:
+                    st.write(
+                        f"**Potential Savings:** €{opportunity['potential_savings']}"
+                    )
+                    st.write(f"**Action:** {opportunity['action']}")
+
+    # Insights and recommendations
+    st.subheader("🔍 Cost Insights")
+
+    # Calculate some insights
+    total_cost = cost_breakdown["total_cost_euros"]
+    total_energy = cost_breakdown["total_energy_kwh"]
+
+    # Simple insights
+    if total_cost > 0:
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.info(
+                f"**Your current usage costs €{total_cost:.2f} for {total_energy:.1f} kWh**"
+            )
+
+            if "time_periods" in cost_breakdown:
+                peak_percentage = (
+                    cost_breakdown["time_periods"].get("peak", {}).get("percentage", 0)
+                )
+                if peak_percentage > 20:
+                    st.warning(
+                        f"⚠️ **{peak_percentage}% of your usage is during peak hours** - Consider shifting to cheaper times"
+                    )
+                else:
+                    st.success(
+                        f"✅ **Good peak management** - Only {peak_percentage}% during expensive peak hours"
+                    )
+
+        with col2:
+            # Monthly projection insights
+            monthly_cost = cost_breakdown.get("monthly_projection", {}).get(
+                "cost_euros", 0
+            )
+            if monthly_cost > 0:
+                st.info(
+                    f"**At this rate, you'll spend approximately €{monthly_cost:.0f} per month**"
+                )
+
+                if monthly_cost > 150:
+                    st.warning(
+                        "💡 **High monthly costs detected** - Consider energy efficiency improvements"
+                    )
+                elif monthly_cost < 80:
+                    st.success(
+                        "✅ **Efficient energy usage** - Your costs are below average"
+                    )
+                else:
+                    st.info("📊 **Moderate energy usage** - Room for optimization")
 
 
 def show_appliance_detection_page():
