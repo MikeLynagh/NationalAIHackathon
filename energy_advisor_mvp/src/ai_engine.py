@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 class AIEngine:
     """AI-powered analysis engine for energy usage patterns."""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "deepseek-chat"):
         """
         Initialize AI engine.
 
@@ -57,7 +57,7 @@ class AIEngine:
         # Configuration
         self.max_tokens = int(os.getenv("AI_MAX_TOKENS", 4000))
         self.temperature = float(os.getenv("AI_TEMPERATURE", 0.3))
-        self.timeout = int(os.getenv("AI_TIMEOUT_SECONDS", 30))
+        self.timeout = int(os.getenv("AI_TIMEOUT_SECONDS", 60))
         self.enable_fallback = os.getenv("ENABLE_AI_FALLBACK", "true").lower() == "true"
 
     def _setup_ai_client(self):
@@ -66,15 +66,19 @@ class AIEngine:
             logger.warning("No API key provided. AI features will be disabled.")
             return
 
-        # Try OpenAI first
+        # Use DeepSeek by default (OpenAI-compatible)
         if OPENAI_AVAILABLE and self.api_key.startswith("sk-"):
             try:
-                self.client = openai.OpenAI(api_key=self.api_key)
-                self.provider = "openai"
-                logger.info("OpenAI client initialized successfully")
+                # Always use DeepSeek API endpoint
+                self.client = openai.OpenAI(
+                    api_key=self.api_key,
+                    base_url="https://api.deepseek.com/v1"
+                )
+                self.provider = "deepseek"
+                logger.info("DeepSeek client initialized successfully")
                 return
             except Exception as e:
-                logger.error(f"Failed to initialize OpenAI client: {e}")
+                logger.error(f"Failed to initialize DeepSeek client: {e}")
 
         # Try Anthropic
         if ANTHROPIC_AVAILABLE and self.api_key.startswith("sk-ant-"):
@@ -227,12 +231,38 @@ class AIEngine:
             logger.error(f"AI narrative generation failed: {e}")
             return self._fallback_narrative_report(analysis_results)
 
+    def call_ai_analysis(self, prompt: str) -> str:
+        """
+        Public method to call AI analysis with a custom prompt.
+        
+        Args:
+            prompt: The prompt to send to the AI
+            
+        Returns:
+            str: AI response
+        """
+        if not self.client:
+            raise Exception("AI client not initialized")
+        
+        return self._call_ai_api(prompt)
+
+
     def _call_ai_api(self, prompt: str) -> str:
         """Make API call to AI provider."""
         start_time = time.time()
 
         try:
             if self.provider == "openai":
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                )
+                return response.choices[0].message.content
+
+            elif self.provider == "deepseek":
+                # DeepSeek uses OpenAI-compatible API
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],

@@ -8,6 +8,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from dotenv import load_dotenv
+load_dotenv()
 import logging
 from datetime import datetime
 import sys
@@ -736,10 +738,233 @@ def show_appliance_detection_page():
 
 
 def show_recommendations_page():
-    """Recommendations page (placeholder for now)"""
-    st.header("💡 Energy Saving Recommendations")
-    st.info("🚧 This feature is under development. Coming in the next iteration!")
+    """AI-powered recommendations page"""
+    st.header("💡 AI-Powered Energy Saving Recommendations")
+    
+    if 'parsed_data' not in st.session_state:
+        st.warning("⚠️ Please upload data first on the Data Upload page.")
+        return
+    
+    df = st.session_state['parsed_data']
+    
+    if df is None or df.empty:
+        st.error("❌ No data available for recommendations.")
+        return
+    
+    # Rate input section
+    st.subheader("⚡ Enter Your Current Electricity Rate")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        current_rate = st.number_input(
+            "Current Rate per kWh (€):",
+            min_value=0.01,
+            max_value=1.00,
+            value=0.23,
+            step=0.01,
+            help="Enter your current electricity rate in euros per kWh"
+        )
+    
+    with col2:
+        st.markdown("""
+        **AI Analysis**
+        
+        Our AI will analyze your usage patterns and provide personalized recommendations with specific savings estimates.
+        """)
+    
+    # Generate recommendations
+    if st.button("🤖 Generate AI Recommendations", type="primary"):
+        with st.spinner("🤖 AI is analyzing your usage patterns..."):
+            try:
+                from recommendation_engine import RecommendationEngine, generate_action_plan
+                
+                # Generate recommendations
+                engine = RecommendationEngine()
+                recommendations_data = engine.generate_ai_powered_recommendations(df, current_rate)
+                
+                if recommendations_data and 'recommendations' in recommendations_data:
+                    st.success("✅ AI analysis completed!")
+                    show_recommendations_results(recommendations_data)
+                else:
+                    st.error("❌ Failed to generate recommendations. Please check your data.")
+                    
+            except Exception as e:
+                st.error(f"❌ Error generating recommendations: {str(e)}")
+                logger.error(f"Recommendations generation error: {e}")
 
+
+def show_recommendations_results(recommendations_data):
+    """Display AI-powered recommendations results"""
+    recommendations = recommendations_data.get('recommendations', [])
+    total_savings = recommendations_data.get('total_potential_savings', 0)
+    analysis = recommendations_data.get('analysis', {})
+    
+    # Summary metrics
+    st.subheader("📊 AI Analysis Summary")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "Total Recommendations",
+            len(recommendations),
+            help="Number of personalized recommendations generated"
+        )
+    
+    with col2:
+        st.metric(
+            "Monthly Savings Potential",
+            f"€{total_savings}",
+            help="Total potential monthly savings from all recommendations"
+        )
+    
+    with col3:
+        annual_savings = total_savings * 12
+        st.metric(
+            "Annual Savings Potential",
+            f"€{annual_savings:.0f}",
+            help="Total potential annual savings"
+        )
+    
+    with col4:
+        current_monthly = analysis.get('current_costs', {}).get('monthly_projection', {}).get('cost_euros', 0)
+        savings_percentage = (total_savings / current_monthly * 100) if current_monthly > 0 else 0
+        st.metric(
+            "Savings Percentage",
+            f"{savings_percentage:.1f}%",
+            help="Percentage reduction in monthly energy costs"
+        )
+    
+    # Check if we have AI insights (raw response) or structured recommendations
+    ai_insights = recommendations_data.get('ai_insights', [])
+    has_ai_response = any(insight and len(insight.strip()) > 50 for insight in ai_insights)
+    
+    if not recommendations and not has_ai_response:
+        st.info("ℹ️ No specific recommendations found for your usage pattern. Your energy usage appears to be already well optimized!")
+        return
+    
+    # If we have AI insights but no structured recommendations, show the AI response
+    if not recommendations and has_ai_response:
+        st.subheader("🤖 AI-Powered Energy Analysis")
+        for insight in ai_insights:
+            if insight and len(insight.strip()) > 50:  # Only show substantial responses
+                st.markdown("### DeepSeek AI Analysis:")
+                st.markdown(insight)
+        return
+    
+    # Recommendations by impact level
+    st.subheader("🎯 Recommendations by Impact Level")
+    
+    # Group recommendations by impact level
+    impact_groups = {}
+    for rec in recommendations:
+        impact = rec.get('impact_level', 'Minimal Impact')
+        if impact not in impact_groups:
+            impact_groups[impact] = []
+        impact_groups[impact].append(rec)
+    
+    # Display recommendations by impact level
+    impact_order = ['High Impact', 'Medium Impact', 'Low Impact', 'Minimal Impact']
+    
+    for impact_level in impact_order:
+        if impact_level in impact_groups:
+            impact_recs = impact_groups[impact_level]
+            
+            # Impact level header
+            if impact_level == 'High Impact':
+                st.success(f"🔥 **{impact_level}** - {len(impact_recs)} recommendations")
+            elif impact_level == 'Medium Impact':
+                st.info(f"⚡ **{impact_level}** - {len(impact_recs)} recommendations")
+            elif impact_level == 'Low Impact':
+                st.warning(f"💡 **{impact_level}** - {len(impact_recs)} recommendations")
+            else:
+                st.info(f"📝 **{impact_level}** - {len(impact_recs)} recommendations")
+            
+            # Display recommendations for this impact level
+            for i, rec in enumerate(impact_recs):
+                with st.expander(f"{rec.get('title', 'Recommendation')} - Save €{rec.get('monthly_savings', 0)}/month"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**Description:** {rec.get('description', 'No description available')}")
+                        st.write(f"**Monthly Savings:** €{rec.get('monthly_savings', 0)}")
+                        st.write(f"**Annual Savings:** €{rec.get('annual_savings', 0)}")
+                        st.write(f"**Difficulty:** {rec.get('difficulty', 'Unknown')}")
+                        st.write(f"**Time to Implement:** {rec.get('time_to_implement', 'Unknown')}")
+                    
+                    with col2:
+                        if 'action_items' in rec and rec['action_items']:
+                            st.write("**Action Items:**")
+                            for action in rec['action_items']:
+                                st.write(f"• {action}")
+                        
+                        # Show additional details if available
+                        if 'peak_hour' in rec:
+                            st.write(f"**Peak Hour:** {rec['peak_hour']}:00")
+                        if 'current_baseline' in rec:
+                            st.write(f"**Current Baseline:** {rec['current_baseline']} kW")
+    
+    # Action Plan
+    st.subheader("📋 Personalized Action Plan")
+    
+    try:
+        from recommendation_engine import generate_action_plan
+        action_plan = generate_action_plan(recommendations)
+        
+        if action_plan and 'timeline' in action_plan:
+            timeline = action_plan['timeline']
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "This Week",
+                    f"€{timeline.get('immediate', {}).get('savings', 0)}",
+                    help=f"{timeline.get('immediate', {}).get('count', 0)} immediate actions"
+                )
+            
+            with col2:
+                st.metric(
+                    "Next 1-4 Weeks",
+                    f"€{timeline.get('short_term', {}).get('savings', 0)}",
+                    help=f"{timeline.get('short_term', {}).get('count', 0)} short-term actions"
+                )
+            
+            with col3:
+                st.metric(
+                    "Next 1-3 Months",
+                    f"€{timeline.get('long_term', {}).get('savings', 0)}",
+                    help=f"{timeline.get('long_term', {}).get('count', 0)} long-term actions"
+                )
+            
+            # Detailed action plan
+            action_plan_details = action_plan.get('action_plan', {})
+            
+            if action_plan_details.get('immediate'):
+                st.subheader("⚡ Immediate Actions (This Week)")
+                for rec in action_plan_details['immediate']:
+                    st.write(f"• **{rec.get('title', 'Action')}** - Save €{rec.get('monthly_savings', 0)}/month")
+            
+            if action_plan_details.get('short_term'):
+                st.subheader("📅 Short-term Actions (Next 1-4 Weeks)")
+                for rec in action_plan_details['short_term']:
+                    st.write(f"• **{rec.get('title', 'Action')}** - Save €{rec.get('monthly_savings', 0)}/month")
+            
+            if action_plan_details.get('long_term'):
+                st.subheader("🎯 Long-term Actions (Next 1-3 Months)")
+                for rec in action_plan_details['long_term']:
+                    st.write(f"• **{rec.get('title', 'Action')}** - Save €{rec.get('monthly_savings', 0)}/month")
+    
+    except Exception as e:
+        st.warning(f"Could not generate action plan: {str(e)}")
+    
+    # AI Insights
+    ai_insights = recommendations_data.get('ai_insights', [])
+    if ai_insights:
+        st.subheader("🧠 AI Insights")
+        for insight in ai_insights:
+            st.info(f"💡 {insight}")
     if "parsed_data" in st.session_state:
         st.write("Data is available for generating recommendations.")
     else:
