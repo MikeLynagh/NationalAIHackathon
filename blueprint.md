@@ -57,22 +57,22 @@ Deliverables:
 - [ ] Generate 30-min price timeseries for any date range
 - [ ] Calculate: energy cost, standing charges, PSO, discounts, export credits
 
-Module 3: Usage Analysis Engine (6 hours)
+Module 3: Usage Analysis Engine (6 hours) ✅ COMPLETED
 
 File:
 src/usage_analyzer.py
 
-- [ ] def analyze_daily_patterns(usage_df) -> dict
-- [ ] def identify_peaks(usage_df) -> list  # Peak times and magnitudes
-- [ ] def calculate_usage_stats(usage_df) -> dict  # Total, avg, max, time-of-use breakdown
-- [ ] def classify_user_type(usage_stats) -> str  # Night-heavy, day-heavy, balanced
+- [x] def analyze_daily_patterns(usage_df) -> dict
+- [x] def identify_peaks(usage_df) -> list  # Peak times and magnitudes
+- [x] def calculate_usage_stats(usage_df) -> dict  # Total, avg, max, time-of-use breakdown
+- [x] def classify_user_type(usage_stats) -> str  # Night-heavy, day-heavy, balanced
 
 Deliverables:
 
-- [ ] Daily/weekly pattern analysis
-- [ ] Peak usage identification (when, how much)
-- [ ] Time-of-use breakdown (day/night/peak percentages)
-- [ ] User classification for benchmarking
+- [x] Daily/weekly pattern analysis
+- [x] Peak usage identification (when, how much)
+- [x] Time-of-use breakdown (day/night/peak percentages)
+- [x] User classification for benchmarking
 
 End of Day 1 Target: Can upload MPRN file, apply tariff, show basic usage stats and current bill breakdown.
 
@@ -242,7 +242,7 @@ File Structure
 - [x] │   ├── streamlit_app.py       # Main Streamlit application ✅
 - [x] │   ├── data_parser.py         # MPRN file parsing & validation ✅
 - [ ] │   ├── tariff_engine.py       # Tariff calculations & pricing
-- [ ] │   ├── usage_analyzer.py      # Usage pattern analysis
+- [x] │   ├── usage_analyzer.py      # Usage pattern analysis ✅
 - [ ] │   ├── appliance_detector.py  # AI-powered appliance detection
 - [ ] │   ├── recommendation_engine.py # AI-powered savings recommendations
 - [ ] │   ├── benchmarking.py        # Similar household comparisons
@@ -253,7 +253,9 @@ File Structure
 - [ ] │   ├── reference_households.csv # 50 houses for benchmarking
 - [x] │   └── sample_mprn.csv        # Your sample MPRN data ✅
 - [x] ├── tests/
-- [x] │   └── test_data_parser.py    # Data parser testing ✅
+- [x] │   ├── test_data_parser.py    # Data parser testing ✅
+- [x] │   ├── test_streamlit_app.py  # Streamlit app testing ✅
+- [x] │   └── test_usage_analyzer.py # Usage analyzer testing ✅
 - [x] ├── .env.example               # Environment variables template ✅
 - [x] ├── requirements.txt           # Dependencies ✅
 - [ ] └── README.md                  # Setup and usage instructions
