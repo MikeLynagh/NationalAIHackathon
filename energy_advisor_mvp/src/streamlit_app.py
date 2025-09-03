@@ -27,6 +27,7 @@ from data_parser import (
 )
 from usage_analyzer import UsageAnalyzer
 from tariff_engine import calculate_simple_cost, calculate_time_based_cost
+from forecast_consumption import ForecastConsumption
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -52,7 +53,7 @@ def main():
         [
             "📊 Data Upload & Analysis",
             "💰 Usage Patterns",
-            "💰 Cost Analysis",
+            "💰 Forecast & Cost Analysis",
             "🔍 Appliance Detection",
             "💡 Recommendations",
         ],
@@ -62,7 +63,7 @@ def main():
         show_data_upload_page()
     elif page == "💰 Usage Patterns":
         show_usage_patterns_page()
-    elif page == "💰 Cost Analysis":
+    elif page == "💰 Forecast & Cost Analysis":
         show_cost_analysis_page()
     elif page == "🔍 Appliance Detection":
         show_appliance_detection_page()
@@ -500,7 +501,7 @@ def show_usage_patterns_page():
 
 def show_cost_analysis_page():
     """Cost analysis page with tariff calculations"""
-    st.header("💰 Cost Analysis")
+    st.header("💰 Forecast & Cost Analysis")
 
     if "parsed_data" not in st.session_state:
         st.warning("⚠️ Please upload data first on the Data Upload page.")
@@ -511,6 +512,20 @@ def show_cost_analysis_page():
     if df is None or df.empty:
         st.error("❌ No data available for cost analysis.")
         return
+
+    st.subheader("⚡ Forecasted Energy Consumption (Next 30 Days)")
+
+    forecast = ForecastConsumption()
+    forecast_result = forecast.run_forecast_modelling(df)
+    fig = px.line(
+                forecast_result,
+                x='future_datetime',
+                y='forecasted_consumption',
+                title='Forecasted Energy Consumption (Next 30 Days, 30-min Intervals)',
+                labels={'future_datetime': 'Datetime', 'forecasted_consumption': 'Forecasted Consumption (kWh)'},
+                template='plotly_dark'
+            )
+    st.plotly_chart(fig, use_container_width=True)
 
     # Rate input section
     st.subheader("⚡ Enter Your Electricity Rate")
@@ -557,10 +572,10 @@ def show_cost_analysis_page():
         with st.spinner("Calculating costs..."):
             if use_time_based:
                 cost_breakdown = calculate_time_based_cost(
-                    df, day_rate, night_rate, peak_rate
+                    forecast_result, day_rate, night_rate, peak_rate
                 )
             else:
-                cost_breakdown = calculate_simple_cost(df, rate_per_kwh)
+                cost_breakdown = calculate_simple_cost(forecast_result, rate_per_kwh)
 
             if cost_breakdown:
                 st.success("✅ Cost calculation completed!")
@@ -688,7 +703,7 @@ def show_cost_results(cost_breakdown: Dict, df: pd.DataFrame):
 
         with col1:
             st.info(
-                f"**Your current usage costs €{total_cost:.2f} for {total_energy:.1f} kWh**"
+                f"**Your forecasted energy usage costs €{total_cost:.2f} for {total_energy:.1f} kWh**"
             )
 
             if "time_periods" in cost_breakdown:

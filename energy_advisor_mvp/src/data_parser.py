@@ -73,7 +73,7 @@ class MPRNDataParser:
 
         except Exception as e:
             logger.error(f"Error parsing MPRN file: {str(e)}")
-            raise
+            raise e
 
     def validate_mprn_data(self, df: pd.DataFrame) -> Dict:
         """
@@ -176,11 +176,8 @@ class MPRNDataParser:
         # Pivot data to separate import/export columns
         df_pivot = self._pivot_import_export(df_clean)
 
-        # Handle missing intervals
-        df_resampled = self._resample_to_30min(df_pivot)
-
         # Fill small gaps and flag large ones
-        df_filled = self._fill_gaps(df_resampled)
+        df_filled = self._fill_gaps(df_pivot)
 
         logger.info(
             f"Cleaned data: {len(df_filled)} rows, {len(df_filled.columns)} columns"
@@ -215,19 +212,6 @@ class MPRNDataParser:
         logger.info(f"Processed {len(clean_df)} Import records")
 
         return clean_df
-
-    def _resample_to_30min(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Resample data to ensure 30-minute intervals."""
-        # Set timestamp as index
-        df_indexed = df.set_index("timestamp")
-
-        # Resample to 30-minute intervals
-        df_resampled = df_indexed.resample("30min").asfreq()
-
-        # Reset index
-        df_resampled = df_resampled.reset_index()
-
-        return df_resampled
 
     def _fill_gaps(self, df: pd.DataFrame) -> pd.DataFrame:
         """Fill small gaps and flag large ones."""
