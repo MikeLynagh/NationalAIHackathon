@@ -49,11 +49,11 @@ class TariffEngine:
         try:
             # Ensure timestamp is datetime
             df = usage_df.copy()
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df["timestamp"] = pd.to_datetime(df["future_datetime"])
 
             # Calculate total energy consumption (kWh)
             # Each row represents 30 minutes, so multiply by 0.5 hours
-            df["energy_kwh"] = df["import_kw"] * 0.5
+            df["energy_kwh"] = df["forecasted_consumption"] * 0.5
 
             # Basic cost calculations
             total_energy_kwh = df["energy_kwh"].sum()
@@ -177,8 +177,8 @@ class TariffEngine:
 
             # Ensure timestamp is datetime
             df = usage_df.copy()
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-            df["energy_kwh"] = df["import_kw"] * 0.5
+            df["timestamp"] = pd.to_datetime(df["future_datetime"])
+            df["energy_kwh"] = df["forecasted_consumption"] * 0.5
             df["hour"] = df["timestamp"].dt.hour
 
             # Calculate costs for each time period

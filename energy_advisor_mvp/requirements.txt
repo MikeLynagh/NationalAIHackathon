@@ -17,6 +17,7 @@ requests>=2.31.0  # For API calls
 
 # Machine Learning & Analysis
 scikit-learn>=1.3.0  # For ML clustering and pattern recognition
+xgboost>=3.0.4
 
 # Testing
 pytest>=7.4.0
