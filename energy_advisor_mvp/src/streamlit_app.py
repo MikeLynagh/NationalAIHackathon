@@ -52,6 +52,7 @@ def main():
         "Navigation",
         [
             "📊 Data Upload & Analysis",
+            "💡 Suggested Tariff Plan",
             "💰 Usage Patterns",
             "💰 Forecast & Cost Analysis",
             "🔍 Appliance Detection",
@@ -61,6 +62,8 @@ def main():
 
     if page == "📊 Data Upload & Analysis":
         show_data_upload_page()
+    elif page == "💡 Suggested Tariff Plan":
+        tariff_comparison_page()
     elif page == "💰 Usage Patterns":
         show_usage_patterns_page()
     elif page == "💰 Forecast & Cost Analysis":
@@ -84,6 +87,24 @@ def show_data_upload_page():
     """
     )
 
+    """Data upload and initial analysis page"""
+    st.header("📊 Data Upload & Analysis")
+
+    # Use columns to place the slider and file uploader side-by-side
+    # The slider will be in the first column (col1) and the file uploader in the second (col2)
+
+    st.subheader("Select Data Type")
+    # Slider to select between Urban and Rural data
+    selected_type = st.select_slider(
+        "Select the data's geographic type:",
+        options=['urban', 'rural'],
+        help="This setting affects subsequent analysis and calculations."
+    )
+    # Store the selected value in session state
+    st.session_state['type'] = selected_type
+
+    st.info(f"You have selected: **{st.session_state['type']}**")
+
     uploaded_file = st.file_uploader(
         "Choose a CSV file", type=["csv"], help="Upload your MPRN smart meter data file"
     )
@@ -99,6 +120,7 @@ def show_data_upload_page():
 
                 # Store in session state for other pages
                 st.session_state["parsed_data"] = df
+                
                 st.session_state["uploaded_file"] = uploaded_file.name
 
                 # Show data preview
@@ -240,6 +262,123 @@ def show_data_upload_page():
         except Exception as e:
             st.error(f"❌ Error loading 20-day sample data: {str(e)}")
             st.exception(e)  # Show full error details
+
+
+
+# --- Helper: classify time-of-use bands (simplified Summer schedule) ---
+def classify_period(ts):
+    hour = ts.hour
+    weekday = ts.weekday()  # Monday=0, Sunday=6
+    if 0 <= hour < 9:
+        return "night"
+    elif weekday < 5 and 17 <= hour < 19:
+        return "peak"
+    else:
+        return "day"
+
+# --- Main Streamlit page ---
+def tariff_comparison_page():
+    region = st.session_state.get("type", "urban")
+    mprn_df = st.session_state.get("parsed_data")
+
+    if mprn_df is None:
+        st.error("No MPRN data found in session_state['parsed_data'].")
+        return
+
+    # Convert timestamp to datetime
+    mprn_df["timestamp"] = pd.to_datetime(mprn_df["timestamp"])
+
+    # Convert kW to kWh for each 30-min interval
+    mprn_df["kwh"] = mprn_df["import_kw"] * 0.5
+
+    # Classify into periods
+    mprn_df["period"] = mprn_df["timestamp"].apply(classify_period)
+
+    # Aggregate 20-day totals
+    agg = mprn_df.groupby("period")["kwh"].sum()
+
+    # Scale to annual (365/20 days)
+    scale = 365 / mprn_df["timestamp"].dt.date.nunique()
+    annual_use = agg * scale
+    total_import = annual_use.sum()
+
+    # --- Read tariff file ---
+    tariff_df = pd.read_csv("data/tariff.csv")
+
+    # Filter by region
+
+    tariffs = tariff_df[tariff_df["supply_region"] == region]
+
+    results = []
+    for _, t in tariffs.iterrows():
+    
+        # Apply discount to unit rates
+        day_rate_euro = (t["day_unit"] / 100) * (1 - t["discount"])
+        peak_rate_euro = (t["peak_unit"] / 100) * (1 - t["discount"])
+        night_rate_euro = (t["night_unit"] / 100) * (1 - t["discount"])
+
+        import_cost = (
+            annual_use.get("day", 0) * day_rate_euro
+            + annual_use.get("peak", 0) * peak_rate_euro
+            + annual_use.get("night", 0) * night_rate_euro
+        )
+
+        standing_cost = t["standing_charge"]
+        pso_cost = t["el_pso_levy"]
+        cash_bonus = t["cash_bonus"] if not pd.isna(t["cash_bonus"]) else 0
+
+        total_cost = import_cost + standing_cost + pso_cost - cash_bonus
+        results.append({
+            "Supplier": t["supplier"],
+            "Tariff Name": t["tariff_name"],
+            "Supply Region": t["supply_region"],
+            "Plan Type": t["plan_type"],
+            "Discount": t["discount"],
+            "Contract Duration": t["duration"],
+            "Total Annual Cost": total_cost,
+            "Standing Charge": standing_cost,
+            "PSO levy": pso_cost,
+            "Cash Bonus": cash_bonus,
+            "Total import unit costs": import_cost,
+            "Total export unit costs": 0,
+            "Extra": t["extra"] if "extra" in t else "",
+            "Last Updated Date": t["update_date"],
+        })
+
+
+
+    result_df = pd.DataFrame(results).sort_values("Total Annual Cost")
+
+    # --- Summary Metrics ---
+    avg_cost = result_df["Total Annual Cost"].mean()
+    best_plan = result_df.iloc[0]
+
+    st.subheader("Best Annual Tariff Plan Based on your usage")
+    col1, col2 = st.columns(2)
+    col1.metric("Estimated Annual Import", f"{total_import:,.0f} kWh")
+    col2.metric(
+        "Best Plan Annual Cost",
+        f"€{best_plan['Total Annual Cost']:.2f}",
+        f"€{avg_cost - best_plan['Total Annual Cost']:.2f} cheaper than average",
+    )
+
+    # --- Highlight DataFrame ---
+    def highlight_cost(val):
+        min_cost = result_df["Total Annual Cost"].min()
+        max_cost = result_df["Total Annual Cost"].max()
+        # Normalize 0 → green, 1 → red
+        ratio = (val - min_cost) / (max_cost - min_cost + 1e-9)
+        if ratio < 0.25:
+            color = "#50C878"  # green
+        elif ratio < 0.5:
+            color = "#FFEA00"  # yellow
+        elif ratio < 0.75:
+            color = "#ffd27f"  # orange
+        else:
+            color = "#ff9999"  # red
+        return f"background-color: {color}"
+
+    st.dataframe(result_df.style.applymap(highlight_cost, subset=["Total Annual Cost"]))
 
 
 def show_basic_statistics(df):
