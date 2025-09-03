@@ -39,23 +39,27 @@ Deliverables:
 - [x] Clean: fill small gaps, flag large gaps, ensure 30-min intervals
 - [x] Error handling: clear messages for bad files
 
-Module 2: Tariff Engine (6 hours)
+Module 2: Tariff Engine (6 hours) ✅ COMPLETED
 
 File:
 src/tariff_engine.py
 
-- [ ] def load_tariff_plans(excel_path) -> pd.DataFrame
-- [ ] def parse_tariff_plan(plan_row) -> dict  # Extract time windows, rates
-- [ ] def generate_price_timeseries(plan, date_range) -> pd.Series
-- [ ] def calculate_bill(usage_df, price_series, plan_details) -> dict
+- [x] def load_tariff_plans(excel_path) -> pd.DataFrame
+- [x] def parse_tariff_plan(plan_row) -> dict  # Extract time windows, rates
+- [x] def generate_price_timeseries(plan, date_range) -> pd.Series
+- [x] def calculate_bill(usage_df, price_series, plan_details) -> dict
+- [x] def calculate_simple_cost(usage_df, rate_per_kwh) -> dict  # Simple rate input
+- [x] def calculate_time_based_cost(usage_df, day_rate, night_rate) -> dict  # Day/night rates
 
 Deliverables:
 
-- [ ] Load your Tariff Plans.xlsx
-- [ ] Parse time windows (Day: 8:00-23:00, Peak: 17:00-19:00, etc.)
-- [ ] Handle overlapping windows (precedence: Peak > EV > Day > Night)
-- [ ] Generate 30-min price timeseries for any date range
-- [ ] Calculate: energy cost, standing charges, PSO, discounts, export credits
+- [x] Simple rate input: User enters €/kWh rate for basic cost calculation
+- [x] Enhanced tariff plans: Load from Excel/CSV with time windows
+- [x] Parse time windows (Day: 8:00-17:00, Peak: 17:00-19:00, Evening: 19:00-23:00, Night: 23:00-08:00)
+- [x] Handle overlapping windows (precedence: Peak > EV > Day > Night)
+- [x] Generate 30-min price timeseries for any date range
+- [x] Calculate: energy cost, standing charges, PSO, discounts, export credits
+- [x] LLM integration: AI-powered cost analysis and savings insights
 
 Module 3: Usage Analysis Engine (6 hours) ✅ COMPLETED
 
@@ -74,7 +78,7 @@ Deliverables:
 - [x] Time-of-use breakdown (day/night/peak percentages)
 - [x] User classification for benchmarking
 
-End of Day 1 Target: Can upload MPRN file, apply tariff, show basic usage stats and current bill breakdown.
+End of Day 1 Target: ✅ COMPLETED - Can upload MPRN file, calculate costs with simple rate input, show basic usage stats and current bill breakdown with €€ amounts.
 
 Day 2: Appliance Detection & Recommendations (16 hours)
 Module 4: AI-Powered Appliance Detection (8 hours)
@@ -241,7 +245,7 @@ File Structure
 - [x] ├── src/
 - [x] │   ├── streamlit_app.py       # Main Streamlit application ✅
 - [x] │   ├── data_parser.py         # MPRN file parsing & validation ✅
-- [ ] │   ├── tariff_engine.py       # Tariff calculations & pricing
+- [x] │   ├── tariff_engine.py       # Tariff calculations & pricing ✅
 - [x] │   ├── usage_analyzer.py      # Usage pattern analysis ✅
 - [ ] │   ├── appliance_detector.py  # AI-powered appliance detection
 - [ ] │   ├── recommendation_engine.py # AI-powered savings recommendations
@@ -255,7 +259,8 @@ File Structure
 - [x] ├── tests/
 - [x] │   ├── test_data_parser.py    # Data parser testing ✅
 - [x] │   ├── test_streamlit_app.py  # Streamlit app testing ✅
-- [x] │   └── test_usage_analyzer.py # Usage analyzer testing ✅
+- [x] │   ├── test_usage_analyzer.py # Usage analyzer testing ✅
+- [x] │   └── test_tariff_engine.py  # Tariff engine testing ✅
 - [x] ├── .env.example               # Environment variables template ✅
 - [x] ├── requirements.txt           # Dependencies ✅
 - [ ] └── README.md                  # Setup and usage instructions
@@ -279,8 +284,9 @@ Key Data Flows
 - [ ] → analyze_daily_patterns() → detect_appliances() → classify_user_type()
 
 2. Tariff → Pricing Flow
-- [ ] Tariff Excel → load_tariff_plans() → user selects plan → parse_tariff_plan()
-- [ ] → generate_price_timeseries() → calculate_bill() (current cost)
+- [ ] Simple Rate Input → calculate_simple_cost() → current usage cost with €€ amounts
+- [ ] Enhanced Tariff Excel → load_tariff_plans() → user selects plan → parse_tariff_plan()
+- [ ] → generate_price_timeseries() → calculate_bill() (detailed cost breakdown)
 
 3. Recommendations Flow
 - [ ] Usage + Tariffs → find_optimal_tariff() → optimize_appliance_timing()
@@ -292,14 +298,14 @@ Key Data Flows
 
 Success Criteria
 
-- [ ] Day 1: Core pipeline works, can show current bill breakdown
+- [x] Day 1: Core pipeline works, can show current bill breakdown with €€ amounts from simple rate input ✅
 - [ ] Day 2: Appliance detection works, can recommend tariff + time shifts with savings
 - [ ] Day 3: Complete UI, benchmarking, tested and demo-ready
 
 Demo Script:
 
 - [ ] Upload sample MPRN file → shows parsed data preview
-- [ ] Select current tariff → shows current bill breakdown
+- [ ] Enter simple rate (€0.23/kWh) → shows current usage costs with €€ amounts
 - [ ] View analysis → shows patterns, detected appliances, vs similar homes
 - [ ] View recommendations → shows tariff savings + time-shift savings
 - [ ] View action plan → shows specific steps to save €X/month

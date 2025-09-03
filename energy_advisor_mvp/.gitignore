@@ -78,7 +78,6 @@ logs/
 *.xlsx
 *.xls
 *.json
-data/sample_mprn.csv
 data/tariff_plans.xlsx
 data/reference_households.csv
 
