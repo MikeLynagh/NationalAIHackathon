@@ -15,6 +15,7 @@ from datetime import datetime
 import sys
 import os
 from typing import Dict
+import joblib
 
 # Add src directory to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__)))
@@ -881,15 +882,127 @@ def show_cost_results(cost_breakdown: Dict, df: pd.DataFrame):
 
 
 def show_appliance_detection_page():
-    """Appliance detection page (placeholder for now)"""
+    """Display appliance detection analysis"""
     st.header("🔍 Appliance Detection")
-    st.info("🚧 This feature is under development. Coming in the next iteration!")
 
-    if "parsed_data" in st.session_state:
-        st.write("Data is available for appliance detection analysis.")
-    else:
+    if "parsed_data" not in st.session_state:
         st.warning("⚠️ Please upload data first on the Data Upload page.")
+        return
 
+    df = st.session_state["parsed_data"]
+
+    if df is None or df.empty:
+        st.error("❌ No data available for analysis.")
+        return
+
+    try:
+        # Prepare data for model
+        df_model = df.copy()
+        df_model["power"] = df_model["import_kw"]
+        df_model["power_diff"] = df_model["power"].diff().fillna(0)
+        df_model["rolling_mean_power"] = df_model["power"].rolling(window=3).mean().fillna(0)
+        df_model["rolling_std_power"] = df_model["power"].rolling(window=3).std().fillna(0)
+        df_model.dropna(inplace=True)
+
+        # Load the model
+        with st.spinner("Loading appliance detection model..."):
+            model = joblib.load("model/appliance_prediction_model.pkl")
+
+        # Make predictions
+        predictions = model.predict(df_model[["power", "power_diff", "rolling_mean_power", "rolling_std_power"]])
+        df_model["predicted_appliance"] = predictions
+
+        # Process predictions into time segments
+        appliance_segments = []
+        current_appliance = None
+        start_time = None
+
+        for index, row in df_model.iterrows():
+            if current_appliance is None:
+                current_appliance = row["predicted_appliance"]
+                start_time = row["timestamp"]
+            elif row["predicted_appliance"] != current_appliance:
+                appliance_segments.append({
+                    "appliance_name": current_appliance,
+                    "start_time": start_time,
+                    "end_time": row["timestamp"]
+                })
+                current_appliance = row["predicted_appliance"]
+                start_time = row["timestamp"]
+
+        # Add final segment
+        if current_appliance is not None:
+            appliance_segments.append({
+                "appliance_name": current_appliance,
+                "start_time": start_time,
+                "end_time": df_model.iloc[-1]["timestamp"]
+            })
+
+        # Store in session state
+        st.session_state["appliance_segments"] = appliance_segments
+
+        # Display results
+        st.subheader("📊 Detected Appliance Usage")
+
+        # Create timeline chart using plotly
+        fig = go.Figure()
+
+        # Color map for different appliances
+        colors = px.colors.qualitative.Set3
+
+        # Get unique appliances
+        unique_appliances = list(set(segment["appliance_name"] for segment in appliance_segments))
+        color_map = dict(zip(unique_appliances, colors[:len(unique_appliances)]))
+
+        for segment in appliance_segments:
+            fig.add_trace(go.Bar(
+                x=[segment["start_time"], segment["end_time"]],
+                y=[segment["appliance_name"], segment["appliance_name"]],
+                orientation="h",
+                name=segment["appliance_name"],
+                marker_color=color_map[segment["appliance_name"]],
+                showlegend=False
+            ))
+
+        fig.update_layout(
+            title="Appliance Usage Timeline",
+            xaxis_title="Time",
+            yaxis_title="Appliance",
+            height=400,
+            barmode="overlay"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Display summary table
+        st.subheader("📋 Usage Summary")
+        summary_data = []
+        for appliance in unique_appliances:
+            appliance_times = [
+                segment for segment in appliance_segments 
+                if segment["appliance_name"] == appliance
+            ]
+            total_duration = sum(
+                (segment["end_time"] - segment["start_time"]).total_seconds() / 3600 
+                for segment in appliance_times
+            )
+            usage_count = len(appliance_times)
+            
+            summary_data.append({
+                "Appliance": appliance,
+                "Usage Count": usage_count,
+                "Total Hours": f"{total_duration:.2f}"
+            })
+
+        st.dataframe(
+            pd.DataFrame(summary_data),
+            use_container_width=True,
+            hide_index=True
+        )
+
+    except Exception as e:
+        st.error(f"❌ Error in appliance detection: {str(e)}")
+        st.exception(e)
 
 def show_recommendations_page():
     """AI-powered recommendations page"""
