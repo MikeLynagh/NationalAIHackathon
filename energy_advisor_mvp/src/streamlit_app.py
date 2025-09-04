@@ -9,6 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from dotenv import load_dotenv
+from ai_response_formatter import format_ai_response
 load_dotenv()
 import logging
 from datetime import datetime
@@ -27,7 +28,7 @@ from data_parser import (
 )
 from usage_analyzer import UsageAnalyzer
 from tariff_engine import calculate_simple_cost, calculate_time_based_cost
-# from forecast_consumption import ForecastConsumption
+# # from forecast_consumption import ForecastConsumption
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1007,7 +1008,7 @@ def show_recommendations_results(recommendations_data):
         for insight in ai_insights:
             if insight and len(insight.strip()) > 50:  # Only show substantial responses
                 st.markdown("### DeepSeek AI Analysis:")
-                st.markdown(insight)
+                format_ai_response(insight)
         return
     
     # Recommendations by impact level
@@ -1121,7 +1122,7 @@ def show_recommendations_results(recommendations_data):
     if ai_insights:
         st.subheader("🧠 AI Insights")
         for insight in ai_insights:
-            st.info(f"💡 {insight}")
+            format_ai_response(insight)
     if "parsed_data" in st.session_state:
         st.write("Data is available for generating recommendations.")
     else:
