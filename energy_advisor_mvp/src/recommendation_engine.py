@@ -10,6 +10,8 @@ import numpy as np
 from typing import Dict, List, Optional
 from datetime import datetime
 import logging
+import json
+import re
 
 # Import our existing modules
 from ai_engine import AIEngine
@@ -338,10 +340,26 @@ class RecommendationEngine:
             key=lambda x: (impact_order.get(x.get('impact_level', 'Minimal Impact'), 3), -x.get('monthly_savings', 0))
         )
 
+    @staticmethod
+    def extract_json_from_ai_response(ai_response):
+        # Use regex to find the JSON block between ```json and ```
+        match = re.search(r"```json(.*?)```", ai_response, re.DOTALL)
+        if match:
+            json_str = match.group(1).strip()
+            try:
+                return json.loads(json_str)
+            except Exception as e:
+                print(f"Error parsing JSON: {e}")
+                return None
+        else:
+            print("No JSON block found in ai_response.")
+            return None
+
     def generate_ai_powered_recommendations(
         self,
         usage_df: pd.DataFrame,
         current_rate: float,
+        appliance_insights_prompt: str,
         user_preferences: Optional[Dict] = None
     ) -> Dict:
         """
@@ -361,114 +379,125 @@ class RecommendationEngine:
 
         # Initialize AI engine if not provided
         if not self.ai_engine:
-            self.ai_engine = AIEngine(model="deepseek-chat")
+            self.ai_engine = AIEngine(model="gemini-1.5-pro")
 
         if not self.ai_engine.client:
             logger.warning("AI Engine not initialized. Falling back to data-driven recommendations.")
             # Fallback to existing data-driven recommendations
             return self.generate_recommendations(usage_df, current_rate, user_preferences)
 
-        try:
-            # 1. Get comprehensive analysis data
-            daily_patterns = self.usage_analyzer.analyze_daily_patterns(usage_df)
-            usage_stats = self.usage_analyzer.calculate_usage_stats(usage_df)
-            current_costs = self.tariff_engine.calculate_simple_cost(usage_df, current_rate)
-            peaks = self.usage_analyzer.identify_peaks(usage_df)
+        # try:
+        # 1. Get comprehensive analysis data
+        daily_patterns = self.usage_analyzer.analyze_daily_patterns(usage_df)
+        usage_stats = self.usage_analyzer.calculate_usage_stats(usage_df)
+        current_costs = self.tariff_engine.calculate_simple_cost(usage_df, current_rate)
+        peaks = self.usage_analyzer.identify_peaks(usage_df)
 
-            # Prepare data for LLM prompt
-            household_profile = {
-                "total_energy_kwh": round(usage_stats.get('basic', {}).get('total_energy_kwh', 0), 2),
-                "average_power_kw": round(usage_stats.get('basic', {}).get('average_power_kw', 0), 2),
-                "current_rate_euros_per_kwh": current_rate,
-                "current_monthly_cost_euros": round(current_costs.get('monthly_projection', {}).get('cost_euros', 0), 2)
-            }
+        # Prepare data for LLM prompt
+        household_profile = {
+            "total_energy_kwh": round(usage_stats.get('basic', {}).get('total_energy_kwh', 0), 2),
+            "average_power_kw": round(usage_stats.get('basic', {}).get('average_power_kw', 0), 2),
+            "current_rate_euros_per_kwh": current_rate,
+            "current_monthly_cost_euros": round(current_costs.get('monthly_projection', {}).get('cost_euros', 0), 2)
+        }
 
-            usage_patterns = {
-                "peak_hours_usage_kw": round(usage_stats.get('peak_hours', {}).get('peak_hours_usage', 0), 2),
-                "night_usage_avg_kw": round(usage_stats.get('night_vs_day', {}).get('night_usage_avg', 0), 2),
-                "day_usage_avg_kw": round(usage_stats.get('night_vs_day', {}).get('day_usage_avg', 0), 2),
-                "night_day_ratio": round(usage_stats.get('night_vs_day', {}).get('night_day_ratio', 0), 2),
-                "peak_to_average_ratio": round(usage_stats.get('efficiency', {}).get('peak_to_average_ratio', 0), 2)
-            }
+        usage_patterns = {
+            "peak_hours_usage_kw": round(usage_stats.get('peak_hours', {}).get('peak_hours_usage', 0), 2),
+            "night_usage_avg_kw": round(usage_stats.get('night_vs_day', {}).get('night_usage_avg', 0), 2),
+            "day_usage_avg_kw": round(usage_stats.get('night_vs_day', {}).get('day_usage_avg', 0), 2),
+            "night_day_ratio": round(usage_stats.get('night_vs_day', {}).get('night_day_ratio', 0), 2),
+            "peak_to_average_ratio": round(usage_stats.get('efficiency', {}).get('peak_to_average_ratio', 0), 2)
+        }
 
-            cost_breakdown = {
-                "night_percentage": current_costs.get('time_periods', {}).get('night', {}).get('percentage', 0),
-                "day_percentage": current_costs.get('time_periods', {}).get('day', {}).get('percentage', 0),
-                "peak_percentage": current_costs.get('time_periods', {}).get('peak', {}).get('percentage', 0),
-                "evening_percentage": current_costs.get('time_periods', {}).get('evening', {}).get('percentage', 0)
-            }
+        cost_breakdown = {
+            "night_percentage": current_costs.get('time_periods', {}).get('night', {}).get('percentage', 0),
+            "day_percentage": current_costs.get('time_periods', {}).get('day', {}).get('percentage', 0),
+            "peak_percentage": current_costs.get('time_periods', {}).get('peak', {}).get('percentage', 0),
+            "evening_percentage": current_costs.get('time_periods', {}).get('evening', {}).get('percentage', 0)
+        }
 
-            # Summarize hourly patterns
-            hourly_summary = {hour: round(data['mean'], 2) for hour, data in daily_patterns.get('hourly_pattern', {}).items()}
+        # Summarize hourly patterns
+        hourly_summary = {hour: round(data['mean'], 2) for hour, data in daily_patterns.get('hourly_pattern', {}).items()}
 
-            # Summarize top peaks
-            peak_summary = []
-            for peak in peaks[:5]:  # Top 5 peaks
-                peak_summary.append({
-                    "timestamp": peak.get('timestamp', ''),
-                    "power_kw": round(peak.get('power_kw', 0), 2),
-                    "duration_minutes": peak.get('duration_minutes', 0)
-                })
+        # Summarize top peaks
+        peak_summary = []
+        for peak in peaks[:5]:  # Top 5 peaks
+            peak_summary.append({
+                "timestamp": peak.get('timestamp', ''),
+                "power_kw": round(peak.get('power_kw', 0), 2),
+                "duration_minutes": peak.get('duration_minutes', 0)
+            })
 
-            # Construct the prompt
-            prompt_data = {
-                "household_profile": household_profile,
-                "usage_patterns": usage_patterns,
-                "cost_breakdown": cost_breakdown,
-                "hourly_usage_summary": hourly_summary,
-                "top_peak_events": peak_summary,
-                "user_preferences": user_preferences
-            }
+        # Construct the prompt
+        prompt_data = {
+            "household_profile": household_profile,
+            "usage_patterns": usage_patterns,
+            "cost_breakdown": cost_breakdown,
+            "hourly_usage_summary": hourly_summary,
+            "top_peak_events": peak_summary,
+            "user_preferences": user_preferences,
+            "appliance_insights": appliance_insights_prompt
+        }
 
-            prompt_template = f"""
-            You are an expert energy advisor analyzing Irish household smart meter data.
-            Based on the following JSON data, provide specific, actionable energy-saving recommendations.
-            The recommendations should be tailored to the user's usage patterns and the Irish electricity market.
-            
-            For each recommendation, include:
-            1. A clear title.
-            2. A detailed description of the action.
-            3. An EXACT estimated monthly savings in Euros (€/month).
-            4. An estimated annual savings in Euros (€/year).
-            5. A difficulty level (Easy, Medium, Hard).
-            6. An estimated time to implement (e.g., Immediate, 1-2 weeks, 1-3 months).
-            7. Specific action items the user can take.
-            8. Where applicable, an ROI analysis or payback period.
-            
-            The output should be a JSON array of recommendation objects.
-            
-            Here is the user's energy data:
-            {prompt_data}
-            
-            Ensure all monetary values are clearly in Euros and savings are calculated based on the provided current rate and usage data.
-            If no specific recommendations are found, return an empty array.
-            """
+        prompt_template = f"""
+        You are an expert energy advisor analyzing Irish household smart meter data.
+        Based on the following JSON data, provide specific, actionable energy-saving recommendations.
+        The recommendations should be tailored to the user's usage patterns and the Irish electricity market.
+        
+        For each recommendation, include:
+        1. A clear title.
+        2. A detailed description of the action.
+        3. An EXACT estimated monthly savings in Euros (€/month).
+        4. An estimated annual savings in Euros (€/year).
+        5. A difficulty level (Easy, Medium, Hard).
+        6. An estimated time to implement (e.g., Immediate, 1-2 weeks, 1-3 months).
+        7. Specific action items the user can take.
+        8. Where applicable, an ROI analysis or payback period.
+        
+        The output should be a JSON array of recommendation objects.
 
-            # Call the AI engine
-            logger.info("🤖 Calling OpenAI for AI-powered recommendations...")
-            ai_response = self.ai_engine.call_ai_analysis(prompt_template)
-            
-            # Return raw AI response (no JSON parsing)
-            logger.info(f"✅ AI generated response: {len(ai_response)} characters")
+        Add in a key "total_potential_savings" in the JSON which gives a exact number of total potential savings in a month keep the number as integer data type
+        
+        Here is the user's energy data:
+        {prompt_data}
+        
+        Ensure all monetary values are clearly in Euros and savings are calculated based on the provided current rate and usage data.
+        If no specific recommendations are found, return an empty array.
+        """
+        print("\n--------------- PROMPT TEMPLATE ----------------\n")
+        print(prompt_template)
+        # Call the AI engine
+        logger.info("🤖 Calling OpenAI for AI-powered recommendations...")
+        ai_response = self.ai_engine.call_ai_analysis(prompt_template)
 
-            return {
-                'recommendations': [],  # Empty for now, we'll show raw response
-                'ai_insights': [ai_response],  # Raw AI response
-                'total_potential_savings': 0,  # Will calculate from raw response if needed
-                'analysis': {
-                    'current_costs': current_costs,
-                    'usage_stats': usage_stats,
-                    'daily_patterns': daily_patterns,
-                    'llm_prompt_data': prompt_data
-                },
-                'generated_at': datetime.now().isoformat()
-            }
+        print("\n--------------- AI RESPONSE ----------------\n")
+        print(ai_response)
 
-        except Exception as e:
-            logger.error(f"Error generating AI-powered recommendations: {e}")
-            # Fallback to data-driven recommendations
-            logger.info("Falling back to data-driven recommendations...")
-            return self.generate_recommendations(usage_df, current_rate, user_preferences)
+        ai_response_json = self.extract_json_from_ai_response(ai_response)
+        print("\n--------------- AI RESPONSE JSON ----------------\n")
+        print(ai_response_json)
+        # Return raw AI response (no JSON parsing)
+        logger.info(f"✅ AI generated response: {len(ai_response)} characters")
+
+        return {
+            'recommendations': ai_response_json.get("recommendations"),  # Empty for now, we'll show raw response
+            'ai_insights': [ai_response],  # Raw AI response
+            'ai_insights_json': ai_response_json,
+            'total_potential_savings': ai_response_json.get("total_potential_savings"),  # Will calculate from raw response if needed
+            'analysis': {
+                'current_costs': current_costs,
+                'usage_stats': usage_stats,
+                'daily_patterns': daily_patterns,
+                'llm_prompt_data': prompt_data
+            },
+            'generated_at': datetime.now().isoformat()
+        }
+
+        # except Exception as e:
+        #     logger.error(f"Error generating AI-powered recommendations: {e}")
+        #     # Fallback to data-driven recommendations
+        #     logger.info("Falling back to data-driven recommendations...")
+        #     return self.generate_recommendations(usage_df, current_rate, user_preferences)
 
 
     def generate_action_plan(self, recommendations: List[Dict]) -> Dict:
