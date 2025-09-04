@@ -202,15 +202,22 @@ class Config:
             'model': 'claude-3-sonnet-20240229',
             'temperature': 0.1,
             'max_tokens': 200
+        },
+        'gemini': {
+            'api_key_env': 'GEMINI_API_KEY',
+            'model': 'gemini-1.5-pro',
+            'temperature': 0.1,
+            'max_tokens': 200
         }
     }
     
-    # Default LLM provider
-    DEFAULT_LLM_PROVIDER = 'openai'
+    # Default LLM provider - Now using Gemini
+    DEFAULT_LLM_PROVIDER = 'gemini'
     
     # API Keys (fallback - NOT recommended for production)
     # OPENAI_API_KEY = "your-key-here"  # Uncomment and add your key
     # ANTHROPIC_API_KEY = "your-key-here"  # Uncomment and add your key
+    # GEMINI_API_KEY = "your-key-here"  # Uncomment and add your key
     
     # Natural language processing configuration
     NLP_CONFIDENCE_THRESHOLD = 0.7

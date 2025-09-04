@@ -6,6 +6,7 @@ This is the main entry point that combines all components
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
@@ -28,8 +29,12 @@ logger = logging.getLogger(__name__)
 class EnhancedSmartPlugAgent:
     """Enhanced Smart Plug Agent with LLM integration and hardware interface"""
     
-    def __init__(self, llm_provider: str = "openai"):
+    def __init__(self, llm_provider: str = None):
         logger.info("Initializing Enhanced Smart Plug Agent...")
+        
+        # Use config default if no provider specified
+        if llm_provider is None:
+            llm_provider = Config.DEFAULT_LLM_PROVIDER
         
         # Initialize components
         self.hardware_manager = HardwareManager(Config.DEVICES)
@@ -103,6 +108,22 @@ class EnhancedSmartPlugAgent:
     def _llm_response_to_command(self, llm_response: LLMResponse, original_input: str) -> Optional[SmartPlugCommand]:
         """Convert LLM response to SmartPlugCommand"""
         try:
+            # Handle special case of "all" devices
+            if llm_response.device and llm_response.device.lower() == "all":
+                # Return a special command for all devices
+                action_map = {
+                    'turn_on': ActionType.TURN_ON,
+                    'turn_off': ActionType.TURN_OFF,
+                    'schedule': ActionType.SET_SCHEDULE
+                }
+                action = action_map.get(llm_response.intent, ActionType.TURN_OFF)
+                
+                return SmartPlugCommand(
+                    device_name="all",  # Special identifier
+                    action=action,
+                    scheduled_time=None
+                )
+            
             # Map LLM device name to actual device ID
             device_id = None
             if llm_response.device:
@@ -201,6 +222,10 @@ class EnhancedSmartPlugAgent:
     async def _execute_command(self, command: SmartPlugCommand) -> Dict:
         """Execute a SmartPlugCommand"""
         try:
+            # Handle special case of "all" devices
+            if command.device_name == "all":
+                return await self._execute_all_devices_command(command)
+            
             # Check if device exists
             if command.device_name not in [device.device_id for device in Config.DEVICES]:
                 return {
@@ -257,6 +282,59 @@ class EnhancedSmartPlugAgent:
             return {
                 'success': False,
                 'error': str(e)
+            }
+    
+    async def _execute_all_devices_command(self, command: SmartPlugCommand) -> Dict:
+        """Execute a command on all devices"""
+        try:
+            results = []
+            affected_devices = []
+            
+            for device in Config.DEVICES:
+                try:
+                    if command.action == ActionType.TURN_ON:
+                        success = await self.hardware_manager.turn_on_device(device.device_id)
+                    elif command.action == ActionType.TURN_OFF:
+                        success = await self.hardware_manager.turn_off_device(device.device_id)
+                    else:
+                        success = False
+                    
+                    results.append({
+                        'device': device.device_id,
+                        'friendly_name': device.friendly_name,
+                        'success': success
+                    })
+                    
+                    if success:
+                        affected_devices.append(device.friendly_name)
+                        
+                except Exception as e:
+                    logger.error(f"Error executing command on {device.device_id}: {e}")
+                    results.append({
+                        'device': device.device_id,
+                        'friendly_name': device.friendly_name,
+                        'success': False,
+                        'error': str(e)
+                    })
+            
+            overall_success = len(affected_devices) > 0
+            action_name = "turned on" if command.action == ActionType.TURN_ON else "turned off"
+            
+            return {
+                'success': overall_success,
+                'action': 'executed_immediately',
+                'device': 'all',
+                'affected_devices': affected_devices,
+                'message': f"Successfully {action_name} {len(affected_devices)} device(s): {', '.join(affected_devices)}" if overall_success else "Failed to execute command on any devices",
+                'detailed_results': results
+            }
+            
+        except Exception as e:
+            logger.error(f"Error executing all devices command: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'device': 'all'
             }
     
     async def get_comprehensive_status(self) -> Dict:
