@@ -19,6 +19,7 @@ import time
 import random
 from typing import Dict
 import joblib
+from appliance_insights import get_appliance_insights
 
 # Add src directory to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__)))
@@ -673,8 +674,8 @@ def show_cost_analysis_page():
     forecast_result = forecast.run_forecast_modelling(df)
     fig = px.line(
                 forecast_result,
-                x='future_datetime',
-                y='forecasted_consumption',
+                x='timestamp',
+                y='import_kw',
                 title='Forecasted Energy Consumption (Next 30 Days, 30-min Intervals)',
                 labels={'future_datetime': 'Datetime', 'forecasted_consumption': 'Forecasted Consumption (kWh)'},
                 template='plotly_dark'
@@ -748,26 +749,26 @@ def show_cost_results(cost_breakdown: Dict, df: pd.DataFrame):
     with col1:
         st.metric(
             "Total Energy",
-            f"{cost_breakdown['total_energy_kwh']} kWh",
+            f"{format(cost_breakdown['total_energy_kwh'], '.2f')} kWh",
             help="Total energy consumption in the period",
         )
 
     with col2:
         st.metric(
             "Total Cost",
-            f"€{cost_breakdown['total_cost_euros']}",
+            f"€{format(cost_breakdown['total_cost_euros'], '.2f')}",
             help="Total cost for the period",
         )
 
     with col3:
         daily_cost = cost_breakdown.get("daily_average", {}).get("cost_euros", 0)
-        st.metric("Daily Average", f"€{daily_cost}", help="Average daily cost")
+        st.metric("Daily Average", f"€{format(daily_cost, '.2f')}", help="Average daily cost")
 
     with col4:
         monthly_cost = cost_breakdown.get("monthly_projection", {}).get("cost_euros", 0)
         st.metric(
             "Monthly Projection",
-            f"€{monthly_cost}",
+            f"€{format(monthly_cost, '.2f')}",
             help="Projected monthly cost based on current usage",
         )
 
@@ -785,7 +786,7 @@ def show_cost_results(cost_breakdown: Dict, df: pd.DataFrame):
                     "Time Period": period.title(),
                     "Energy (kWh)": data["energy_kwh"],
                     "Cost (€)": data["cost_euros"],
-                    "Percentage": f"{data['percentage']}%",
+                    "Percentage": f"{format(data['percentage'],'.2f')}%",
                 }
             )
 
@@ -870,7 +871,7 @@ def show_cost_results(cost_breakdown: Dict, df: pd.DataFrame):
                     )
                 else:
                     st.success(
-                        f"✅ **Good peak management** - Only {peak_percentage}% during expensive peak hours"
+                        f"✅ **Good peak management** - Only {format(peak_percentage,'.2f')}% during expensive peak hours"
                     )
 
         with col2:
@@ -957,6 +958,10 @@ def show_appliance_detection_page():
 
         # Display results
         st.subheader("📊 Detected Appliance Usage")
+
+        appliance_insights_prompt = get_appliance_insights(appliance_segments)
+
+        st.session_state["appliance_insights_prompt"] = appliance_insights_prompt
 
         # Create timeline chart using plotly
         fig = go.Figure()
@@ -1057,26 +1062,29 @@ def show_recommendations_page():
     # Generate recommendations
     if st.button("🤖 Generate AI Recommendations", type="primary"):
         with st.spinner("🤖 AI is analyzing your usage patterns..."):
-            try:
-                from recommendation_engine import RecommendationEngine, generate_action_plan
-                
-                # Generate recommendations
-                engine = RecommendationEngine()
-                recommendations_data = engine.generate_ai_powered_recommendations(df, current_rate)
-                
-                if recommendations_data and 'recommendations' in recommendations_data:
-                    st.success("✅ AI analysis completed!")
-                    show_recommendations_results(recommendations_data)
-                else:
-                    st.error("❌ Failed to generate recommendations. Please check your data.")
+            # try:
+            from recommendation_engine import RecommendationEngine, generate_action_plan
+
+            appliance_insights_prompt = st.session_state.get("appliance_insights_prompt")
+            
+            # Generate recommendations
+            engine = RecommendationEngine()
+            recommendations_data = engine.generate_ai_powered_recommendations(df, current_rate, appliance_insights_prompt)
+            
+            if recommendations_data and 'recommendations' in recommendations_data:
+                st.success("✅ AI analysis completed!")
+                show_recommendations_results(recommendations_data)
+            else:
+                st.error("❌ Failed to generate recommendations. Please check your data.")
                     
-            except Exception as e:
-                st.error(f"❌ Error generating recommendations: {str(e)}")
-                logger.error(f"Recommendations generation error: {e}")
+            # except Exception as e:
+            #     st.error(f"❌ Error generating recommendations: {str(e)}")
+            #     logger.error(f"Recommendations generation error: {e}")
 
 
 def show_recommendations_results(recommendations_data):
     """Display AI-powered recommendations results"""
+    ai_insights = recommendations_data.get('ai_insights', [])
     recommendations = recommendations_data.get('recommendations', [])
     total_savings = recommendations_data.get('total_potential_savings', 0)
     analysis = recommendations_data.get('analysis', {})
@@ -1118,7 +1126,6 @@ def show_recommendations_results(recommendations_data):
         )
     
     # Check if we have AI insights (raw response) or structured recommendations
-    ai_insights = recommendations_data.get('ai_insights', [])
     has_ai_response = any(insight and len(insight.strip()) > 50 for insight in ai_insights)
     
     if not recommendations and not has_ai_response:
@@ -1130,7 +1137,7 @@ def show_recommendations_results(recommendations_data):
         st.subheader("🤖 AI-Powered Energy Analysis")
         for insight in ai_insights:
             if insight and len(insight.strip()) > 50:  # Only show substantial responses
-                st.markdown("### DeepSeek AI Analysis:")
+                # st.markdown("### AI Analysis:")
                 st.markdown(insight)
         return
     
@@ -1192,6 +1199,9 @@ def show_recommendations_results(recommendations_data):
     try:
         from recommendation_engine import generate_action_plan
         action_plan = generate_action_plan(recommendations)
+
+        print("\n============ ACTION PLAN ==============\n")
+        print(action_plan)
         
         if action_plan and 'timeline' in action_plan:
             timeline = action_plan['timeline']
@@ -1241,13 +1251,14 @@ def show_recommendations_results(recommendations_data):
         st.warning(f"Could not generate action plan: {str(e)}")
     
     # AI Insights
-    ai_insights = recommendations_data.get('ai_insights', [])
-    if ai_insights:
-        st.subheader("🧠 AI Insights")
-        for insight in ai_insights:
-            st.info(f"💡 {insight}")
+    # ai_insights = recommendations_data.get('ai_insights', [])
+    # if ai_insights:
+    #     st.subheader("🧠 AI Insights")
+    #     for insight in ai_insights:
+    #         st.info(f"💡 {insight}")
     if "parsed_data" in st.session_state:
-        st.write("Data is available for generating recommendations.")
+        ...
+        # st.write("Data is available for generating recommendations.")
     else:
         st.warning("⚠️ Please upload data first on the Data Upload page.")
 
