@@ -27,7 +27,7 @@ from data_parser import (
 )
 from usage_analyzer import UsageAnalyzer
 from tariff_engine import calculate_simple_cost, calculate_time_based_cost
-from forecast_consumption import ForecastConsumption
+# from forecast_consumption import ForecastConsumption
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -653,19 +653,22 @@ def show_cost_analysis_page():
         return
 
     st.subheader("⚡ Forecasted Energy Consumption (Next 30 Days)")
-
-    forecast = ForecastConsumption()
-    forecast_result = forecast.run_forecast_modelling(df)
-    fig = px.line(
-                forecast_result,
-                x='future_datetime',
-                y='forecasted_consumption',
-                title='Forecasted Energy Consumption (Next 30 Days, 30-min Intervals)',
-                labels={'future_datetime': 'Datetime', 'forecasted_consumption': 'Forecasted Consumption (kWh)'},
-                template='plotly_dark'
-            )
-    st.plotly_chart(fig, use_container_width=True)
-
+    
+    st.info("🔧 **Forecasting Feature Temporarily Disabled**")
+    st.markdown("""
+    **The ML forecasting feature is currently being updated.**
+    
+    **Available Features:**
+    - ✅ **Tariff Comparison** - Compare real Irish energy plans
+    - ✅ **Cost Analysis** - Calculate costs with your rates
+    - ✅ **AI Recommendations** - Get personalized energy advice
+    - ✅ **Usage Patterns** - View detailed consumption charts
+    
+    **Coming Soon:** ML-powered consumption forecasting with XGBoost
+    """)
+    
+    st.warning("💡 **Tip:** You can still use all other features to analyze your energy usage and find savings opportunities!")
+    
     # Rate input section
     st.subheader("⚡ Enter Your Electricity Rate")
 
