@@ -1,0 +1,63 @@
+# Requirements for Smart Plug Control Agent System
+
+# Core Python packages
+asyncio>=3.8.0
+typing>=3.8.0
+dataclasses>=0.6
+datetime>=4.3
+json>=2.0.9
+logging>=0.4.9.6
+threading>=1.0
+time>=1.0
+re>=2.2.1
+abc>=1.0
+
+# Smart Plug Hardware Integration
+python-kasa>=0.5.4          # TP-Link Kasa smart plugs
+wyze-sdk>=1.3.0             # Wyze smart plugs (optional)
+
+# LLM Integration (Optional - remove if not using real APIs)
+openai>=1.3.0               # OpenAI GPT integration
+anthropic>=0.7.0            # Anthropic Claude integration
+
+# Async HTTP requests (for API calls)
+aiohttp>=3.8.0
+requests>=2.28.0
+
+# Configuration and data handling
+pydantic>=1.10.0            # Data validation (optional)
+python-dotenv>=0.19.0       # Environment variable management
+pyyaml>=6.0                 # YAML configuration files (optional)
+
+# Scheduling and time handling
+schedule>=1.2.0             # Advanced scheduling (optional alternative)
+pytz>=2022.1               # Timezone handling
+python-dateutil>=2.8.2     # Date parsing utilities
+
+# Logging and monitoring
+colorlog>=6.7.0            # Colored logging output (optional)
+
+# Testing and development
+pytest>=7.0.0              # Testing framework
+pytest-asyncio>=0.21.0     # Async testing support
+black>=22.0.0              # Code formatting
+flake8>=5.0.0              # Code linting
+
+# Optional: Web interface (for future development)
+# fastapi>=0.85.0           # Web API framework
+# uvicorn>=0.18.0           # ASGI server
+# jinja2>=3.1.0             # Template engine
+# websockets>=10.4          # Real-time communication
+
+# Optional: Database support (for persistence)
+# aiosqlite>=0.17.0         # SQLite async support
+# sqlalchemy>=1.4.0         # ORM (optional)
+
+# Optional: Voice integration
+# speechrecognition>=3.9.0  # Voice command recognition
+# pyttsx3>=2.90             # Text-to-speech
+
+# Optional: Machine learning (for usage pattern optimization)
+# scikit-learn>=1.1.0       # ML algorithms
+# numpy>=1.21.0             # Numerical computing
+# pandas>=1.4.0             # Data analysis
