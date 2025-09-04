@@ -11,7 +11,7 @@ import os
 # Add src directory to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from tariff_engine import TariffEngine, calculate_simple_cost, calculate_time_based_cost
+from energy_advisor_mvp.src.tariff_engine import TariffEngine, calculate_simple_cost, calculate_time_based_cost
 
 
 class TestTariffEngine:
