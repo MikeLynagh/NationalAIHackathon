@@ -464,18 +464,12 @@ class RecommendationEngine:
         Ensure all monetary values are clearly in Euros and savings are calculated based on the provided current rate and usage data.
         If no specific recommendations are found, return an empty array.
         """
-        print("\n--------------- PROMPT TEMPLATE ----------------\n")
-        print(prompt_template)
         # Call the AI engine
         logger.info("🤖 Calling OpenAI for AI-powered recommendations...")
         ai_response = self.ai_engine.call_ai_analysis(prompt_template)
 
-        print("\n--------------- AI RESPONSE ----------------\n")
-        print(ai_response)
-
         ai_response_json = self.extract_json_from_ai_response(ai_response)
-        print("\n--------------- AI RESPONSE JSON ----------------\n")
-        print(ai_response_json)
+
         # Return raw AI response (no JSON parsing)
         logger.info(f"✅ AI generated response: {len(ai_response)} characters")
 

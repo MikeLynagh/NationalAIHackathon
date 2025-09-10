@@ -1199,9 +1199,6 @@ def show_recommendations_results(recommendations_data):
     try:
         from recommendation_engine import generate_action_plan
         action_plan = generate_action_plan(recommendations)
-
-        print("\n============ ACTION PLAN ==============\n")
-        print(action_plan)
         
         if action_plan and 'timeline' in action_plan:
             timeline = action_plan['timeline']

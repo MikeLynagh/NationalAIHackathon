@@ -1,30 +1,51 @@
 # Energy Advisor MVP - Dependencies
+
 # Core Framework
 streamlit>=1.28.0
 pandas>=2.0.0
 numpy>=1.24.0
 plotly>=5.15.0
-
-# Data Processing
 openpyxl>=3.1.0  # For Excel reading
-python-dateutil>=2.8.0
+python-dateutil>=2.8.2  # Date parsing utilities
+pytz>=2022.1  # Timezone handling
 
-# AI Integration
-openai>=1.0.0  # For GPT-4 API integration
-anthropic>=0.7.0  # For Claude API integration (alternative)
-python-dotenv>=1.0.0  # For environment variable management
-requests>=2.31.0  # For API calls
-
-# Machine Learning & Analysis
+# AI and ML Integration
+openai>=1.3.0  # For GPT-4 API integration
+anthropic>=0.7.0  # For Claude API integration
+google-genai>=1.33.0  # For Gemini integration
 scikit-learn>=1.3.0  # For ML clustering and pattern recognition
 xgboost>=3.0.4
+joblib>=1.3.0  # For model persistence
 
-# Testing
+# Configuration and Environment
+python-dotenv>=1.0.0  # For environment variables
+pydantic>=1.10.0  # Data validation
+pyyaml>=6.0  # YAML configuration
+
+# Networking and APIs
+requests>=2.31.0  # For API calls
+aiohttp>=3.8.0  # Async HTTP requests
+websockets>=10.4  # Real-time communication
+
+# Smart Plug Integration
+python-kasa>=0.5.4  # TP-Link Kasa smart plugs
+wyze-sdk>=1.3.0  # Wyze smart plugs
+schedule>=1.2.0  # Advanced scheduling
+
+# Development and Testing
 pytest>=7.4.0
 pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0  # Async testing support
+black>=23.0.0  # Code formatting
+flake8>=6.0.0  # Code linting
+pylint>=2.17.0
+colorlog>=6.7.0  # Colored logging output
 
-# Code Quality
-black>=23.0.0
-flake8>=6.0.0
-pylint>=2.17.0 
-joblib
+# Optional Dependencies (commented out)
+# fastapi>=0.85.0  # Web API framework
+# uvicorn>=0.18.0  # ASGI server
+# jinja2>=3.1.0  # Template engine
+# aiosqlite>=0.17.0  # SQLite async support
+# sqlalchemy>=1.4.0  # ORM
+# speechrecognition>=3.9.0  # Voice command recognition
+# pyttsx3>=2.90  # Text-to-speech

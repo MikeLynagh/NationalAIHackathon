@@ -35,6 +35,7 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
 
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ class AIEngine:
             model: Model to use (gpt-4, claude-3-sonnet, etc.)
         """
         self.api_key = (
-            api_key or os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("GEMINI_KEY")
+            api_key or os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("GEMINI_API_KEY")
         )
         self.model = model
         self.client = None
@@ -63,7 +64,7 @@ class AIEngine:
 
         # Configuration
         self.max_tokens = int(os.getenv("AI_MAX_TOKENS", 4000))
-        self.temperature = float(os.getenv("AI_TEMPERATURE", 0.3))
+        self.temperature = float(os.getenv("AI_TEMPERATURE", 0.5))
         self.timeout = int(os.getenv("AI_TIMEOUT_SECONDS", 60))
         self.enable_fallback = os.getenv("ENABLE_AI_FALLBACK", "true").lower() == "true"
 
