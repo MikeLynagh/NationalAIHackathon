@@ -1,0 +1,32 @@
+# Energy Advisor MVP - Cloud/Production Dependencies
+
+# Core Framework
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+plotly>=5.15.0
+openpyxl>=3.1.0
+python-dateutil>=2.8.2
+pytz>=2022.1
+
+# AI and ML Integration
+openai>=1.3.0
+anthropic>=0.7.0
+google-genai>=1.33.0
+scikit-learn>=1.3.0
+xgboost>=3.0.4
+joblib>=1.3.0
+
+# Config and Environment
+python-dotenv>=1.0.0
+pydantic>=1.10.0
+pyyaml>=6.0
+
+# Networking and APIs
+requests>=2.31.0
+aiohttp>=3.8.0
+websockets>=10.4
+
+# Smart Plug Integration
+python-kasa>=0.5.4
+schedule>=1.2.0
