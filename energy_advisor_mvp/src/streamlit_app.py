@@ -46,6 +46,40 @@ except Exception as e:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def get_data_path(filename: str) -> str:
+    """
+    Get the correct path to data files for both local development and Streamlit Cloud.
+    
+    Args:
+        filename: Name of the file in the data directory
+        
+    Returns:
+        Correct path to the data file
+    """
+    # Get the directory of the current script
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Try different possible locations
+    possible_paths = [
+        # For Streamlit Cloud: data folder relative to src
+        os.path.join(current_dir, '..', 'data', filename),
+        # For local development: data folder relative to src
+        os.path.join(current_dir, '..', 'data', filename),
+        # Direct relative path (fallback)
+        os.path.join('data', filename),
+        # Current directory fallback
+        filename
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    
+    # If none found, return the most likely path and let it fail gracefully
+    return os.path.join(current_dir, '..', 'data', filename)
+
+
 # Page configuration
 st.set_page_config(
     page_title="Energy Advisor MVP",
@@ -159,7 +193,7 @@ def show_data_upload_page():
     # Sample data option
     elif st.button("📁 Load 24-Hour Sample"):
         try:
-            sample_path = "data/sample_mprn.csv"
+            sample_path = get_data_path("sample_mprn.csv")
             if os.path.exists(sample_path):
                 with open(sample_path, "r") as f:
                     df = parse_mprn_file(f)
@@ -220,7 +254,7 @@ def show_data_upload_page():
 
     elif st.button("📁 Load 20-Day Sample"):
         try:
-            sample_path = "data/twenty_day_sample_mprn_fixed.csv"
+            sample_path = get_data_path("twenty_day_sample_mprn_fixed.csv")
             if os.path.exists(sample_path):
                 with open(sample_path, "r") as f:
                     df = parse_mprn_file(f)
@@ -319,7 +353,7 @@ def tariff_comparison_page():
     total_import = annual_use.sum()
 
     # --- Read tariff file ---
-    tariff_df = pd.read_csv("data/tariff.csv")
+    tariff_df = pd.read_csv(get_data_path("data/tariff.csv"))
 
     # Filter by region
 
@@ -921,7 +955,7 @@ def show_appliance_detection_page():
 
         # Load the model
         with st.spinner("Loading appliance detection model..."):
-            model = joblib.load("model/appliance_prediction_model.pkl")
+            model = joblib.load(get_data_path("model/appliance_prediction_model.pkl"))
 
         # Make predictions
         predictions = model.predict(df_model[["power", "power_diff", "rolling_mean_power", "rolling_std_power"]])
