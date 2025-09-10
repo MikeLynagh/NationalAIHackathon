@@ -41,39 +41,39 @@ class MPRNDataParser:
         Returns:
             pd.DataFrame: Parsed and structured MPRN data
         """
-        try:
-            # Read CSV file - try different separators
-            if hasattr(uploaded_file, "read"):
-                # File object - try comma first, then tab
-                try:
-                    df = pd.read_csv(uploaded_file)
-                except:
-                    uploaded_file.seek(0)  # Reset file pointer
-                    df = pd.read_csv(uploaded_file, sep="\t")
-            else:
-                # File path - try comma first, then tab
-                try:
-                    df = pd.read_csv(uploaded_file)
-                except:
-                    df = pd.read_csv(uploaded_file, sep="\t")
+        # try:
+        # Read CSV file - try different separators
+        if hasattr(uploaded_file, "read"):
+            # File object - try comma first, then tab
+            try:
+                df = pd.read_csv(uploaded_file)
+            except:
+                uploaded_file.seek(0)  # Reset file pointer
+                df = pd.read_csv(uploaded_file, sep="\t")
+        else:
+            # File path - try comma first, then tab
+            try:
+                df = pd.read_csv(uploaded_file)
+            except:
+                df = pd.read_csv(uploaded_file, sep="\t")
 
-            logger.info(f"Successfully loaded {len(df)} rows from MPRN file")
+        logger.info(f"Successfully loaded {len(df)} rows from MPRN file")
 
-            # Validate basic structure
-            validation_result = self.validate_mprn_data(df)
-            if not validation_result["is_valid"]:
-                raise ValueError(
-                    f"Data validation failed: {validation_result['errors']}"
-                )
+        # Validate basic structure
+        validation_result = self.validate_mprn_data(df)
+        if not validation_result["is_valid"]:
+            raise ValueError(
+                f"Data validation failed: {validation_result['errors']}"
+            )
 
-            # Clean and structure data
-            cleaned_df = self.clean_and_resample(df)
+        # Clean and structure data
+        cleaned_df = self.clean_and_resample(df)
 
-            return cleaned_df
+        return cleaned_df
 
-        except Exception as e:
-            logger.error(f"Error parsing MPRN file: {str(e)}")
-            raise e
+        # except Exception as e:
+        #     logger.error(f"Error parsing MPRN file: {str(e)}")
+        #     raise e
 
     def validate_mprn_data(self, df: pd.DataFrame) -> Dict:
         """
@@ -127,15 +127,15 @@ class MPRNDataParser:
             except:
                 errors.append("Cannot parse 'Read Date and End Time' column")
 
-        # Check for outliers
-        if "Read Value" in df.columns and df["Read Value"].notna().any():
-            values = df["Read Value"].dropna()
-            q99 = values.quantile(0.99)
-            outliers = values[values > q99 * 2]  # Values > 2x 99th percentile
-            if len(outliers) > 0:
-                errors.append(
-                    f"Found {len(outliers)} extreme outliers (>2x 99th percentile)"
-                )
+        # # Check for outliers
+        # if "Read Value" in df.columns and df["Read Value"].notna().any():
+        #     values = df["Read Value"].dropna()
+        #     q99 = values.quantile(0.99)
+        #     outliers = values[values > q99 * 2]  # Values > 2x 99th percentile
+        #     if len(outliers) > 0:
+        #         errors.append(
+        #             f"Found {len(outliers)} extreme outliers (>2x 99th percentile)"
+        #         )
 
         # Check data completeness
         if len(df) == 0:

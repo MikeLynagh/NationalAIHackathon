@@ -28,6 +28,14 @@ try:
 except ImportError:
     ANTHROPIC_AVAILABLE = False
 
+try:
+    import google.generativeai as genai
+
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,7 +44,7 @@ logger = logging.getLogger(__name__)
 class AIEngine:
     """AI-powered analysis engine for energy usage patterns."""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "deepseek-chat"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-1.5-pro"):
         """
         Initialize AI engine.
 
@@ -45,7 +53,7 @@ class AIEngine:
             model: Model to use (gpt-4, claude-3-sonnet, etc.)
         """
         self.api_key = (
-            api_key or os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+            api_key or os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("GEMINI_API_KEY")
         )
         self.model = model
         self.client = None
@@ -56,7 +64,7 @@ class AIEngine:
 
         # Configuration
         self.max_tokens = int(os.getenv("AI_MAX_TOKENS", 4000))
-        self.temperature = float(os.getenv("AI_TEMPERATURE", 0.3))
+        self.temperature = float(os.getenv("AI_TEMPERATURE", 0.5))
         self.timeout = int(os.getenv("AI_TIMEOUT_SECONDS", 60))
         self.enable_fallback = os.getenv("ENABLE_AI_FALLBACK", "true").lower() == "true"
 
@@ -89,6 +97,16 @@ class AIEngine:
                 return
             except Exception as e:
                 logger.error(f"Failed to initialize Anthropic client: {e}")
+
+        if GEMINI_AVAILABLE and self.api_key.startswith("AIza"):
+            try:
+                genai.configure(api_key=self.api_key)
+                self.client = genai.GenerativeModel(self.model)
+                self.provider = "gemini"
+                logger.info("Gemini client initialized successfully")
+                return
+            except Exception as e:
+                logger.error(f"Failed to initialize Gemini client: {e}")
 
         logger.error("No valid AI provider could be initialized")
 
@@ -144,26 +162,26 @@ class AIEngine:
         if not self.client:
             return self._fallback_appliance_insights(detected_appliances)
 
-        try:
-            # Prepare appliance data for AI
-            appliance_summary = self._prepare_appliance_summary(
-                usage_df, detected_appliances
-            )
+        # try:
+        # Prepare appliance data for AI
+        appliance_summary = self._prepare_appliance_summary(
+            usage_df, detected_appliances
+        )
 
-            # Create prompt for appliance insights
-            prompt = self._create_appliance_insights_prompt(appliance_summary)
+        # Create prompt for appliance insights
+        prompt = self._create_appliance_insights_prompt(appliance_summary)
 
-            # Get AI response
-            response = self._call_ai_api(prompt)
+        # Get AI response
+        response = self._call_ai_api(prompt)
 
-            # Parse and structure response
-            insights = self._parse_ai_response(response, "appliance_insights")
+        # Parse and structure response
+        insights = self._parse_ai_response(response, "appliance_insights")
 
-            return insights
+        return insights
 
-        except Exception as e:
-            logger.error(f"AI appliance insights failed: {e}")
-            return self._fallback_appliance_insights(detected_appliances)
+        # except Exception as e:
+        #     logger.error(f"AI appliance insights failed: {e}")
+        #     return self._fallback_appliance_insights(detected_appliances)
 
     def optimize_recommendations_ai(
         self, usage_df: pd.DataFrame, current_recommendations: List[Dict]
@@ -279,6 +297,16 @@ class AIEngine:
                     messages=[{"role": "user", "content": prompt}],
                 )
                 return response.content[0].text
+
+            elif self.provider == "gemini":
+                response = self.client.generate_content(
+                    contents=[{"role": "user", "parts": [prompt]}],
+                    generation_config={
+                        "max_output_tokens": self.max_tokens,
+                        "temperature": self.temperature,
+                    },
+                )
+                return response.text
 
         except Exception as e:
             logger.error(f"AI API call failed: {e}")

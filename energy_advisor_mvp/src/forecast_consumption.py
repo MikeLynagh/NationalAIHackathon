@@ -56,7 +56,7 @@ class ForecastConsumption():
         future_dates = pd.date_range(start=last_known["ds"] + pd.Timedelta(minutes=30), periods=n_periods, freq='30min')
 
         # Prepare future dataframe for recursive prediction
-        future_df = pd.DataFrame({'future_datetime': future_dates})
+        future_df = pd.DataFrame({'timestamp': future_dates})
         preds = []
         lags = [last_known[f"lag_{i}"] for i in range(1, 5)]
         lags = [last_known["y"]] + lags[:-1]  # update lags for next step
@@ -71,7 +71,7 @@ class ForecastConsumption():
             # update lags for next step
             lags = [pred] + lags[:-1]
 
-        future_df["forecasted_consumption"] = preds
+        future_df["import_kw"] = preds
         return future_df
 
     
