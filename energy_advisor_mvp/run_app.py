@@ -28,11 +28,9 @@ def main():
     print()
     
     try:
-        # Run the Streamlit app
+        # Run the Streamlit app (let Streamlit handle port/address automatically)
         subprocess.run([
-            sys.executable, '-m', 'streamlit', 'run', app_path,
-            '--server.port', '8501',
-            '--server.address', 'localhost'
+            sys.executable, '-m', 'streamlit', 'run', app_path
         ])
     except KeyboardInterrupt:
         print("\n👋 App stopped by user")
