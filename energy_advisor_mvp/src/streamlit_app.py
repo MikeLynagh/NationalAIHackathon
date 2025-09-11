@@ -353,7 +353,7 @@ def tariff_comparison_page():
     total_import = annual_use.sum()
 
     # --- Read tariff file ---
-    tariff_df = pd.read_csv(get_data_path("data/tariff.csv"))
+    tariff_df = pd.read_csv(get_data_path("tariff.csv"))
 
     # Filter by region
 
