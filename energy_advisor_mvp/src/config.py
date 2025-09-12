@@ -25,11 +25,11 @@ class Config:
         DeviceConfig(
             device_id="kitchen_dishwasher",
             friendly_name="dishwasher", 
-            ip_address="192.168.1.100",
-            device_type="kasa",
+            ip_address="172.20.10.4",
+            device_type="tapo",
             location="kitchen",
             manufacturer="TP-Link",
-            model="HS110",
+            model="Tapo P100",
             max_power=1800
         ),
         DeviceConfig(
