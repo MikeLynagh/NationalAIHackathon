@@ -1658,6 +1658,12 @@ def execute_smart_agent_command(command: str) -> Dict:
                 # Count pending jobs
                 pending_jobs = len([job for job in status_data['scheduled_jobs'] if job.get('status') == 'pending'])
                 
+                # Determine LLM provider based on agent configuration
+                llm_provider = 'direct'
+                if hasattr(agent, 'use_llm') and agent.use_llm:
+                    if hasattr(agent, 'llm_manager') and agent.llm_manager:
+                        llm_provider = 'llm_enabled'
+                
                 # Format the response to match expected structure
                 formatted_data = {
                     'summary': {
@@ -1667,7 +1673,7 @@ def execute_smart_agent_command(command: str) -> Dict:
                         'pending_jobs': pending_jobs,
                         'power_usage': 0,  # Default since we don't have real power monitoring
                         'power_limit': 15000,  # Default limit
-                        'llm_provider': 'direct'
+                        'llm_provider': llm_provider
                     },
                     'devices': status_data['device_states'],
                     'devices_by_location': devices_by_location,
@@ -1727,6 +1733,7 @@ def execute_smart_agent_command(command: str) -> Dict:
                         'device': result.get('device', command),
                         'message': f"Command '{command}' executed successfully",
                         'confidence': result.get('llm_confidence', 0.0),
+                        'parsing_method': result.get('parsing_method', 'unknown'),
                         'result_details': result
                     }
                 else:
@@ -1978,7 +1985,7 @@ def display_command_result_horizontal(result: Dict):
         elif result.get('type') == 'device_control':
             st.success("🔌 **DEVICE CONTROL SUCCESS**")
             
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Device", result.get('device', 'Unknown'))
             with col2:
@@ -1986,9 +1993,22 @@ def display_command_result_horizontal(result: Dict):
             with col3:
                 confidence = result.get('confidence', 0)
                 st.metric("Confidence", f"{confidence:.1%}")
+            with col4:
+                parsing_method = result.get('parsing_method', 'unknown')
+                method_display = "🧠 LLM" if parsing_method == 'llm' else "🔍 Direct"
+                st.metric("Parser", method_display)
             
             if result.get('message'):
                 st.info(f"📋 **Result:** {result['message']}")
+            
+            # Show parsing method info
+            parsing_method = result.get('parsing_method', 'unknown')
+            if parsing_method == 'llm':
+                st.success("✨ Command processed using AI Language Model")
+            elif parsing_method == 'direct':
+                st.info("🔍 Command processed using direct pattern matching")
+            else:
+                st.warning("❓ Command processing method unknown")
         
         elif result.get('type') == 'emergency':
             st.error("🚨 **EMERGENCY ACTION COMPLETED**")
