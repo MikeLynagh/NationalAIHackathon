@@ -26,7 +26,15 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import time
+import os
 from threading import Thread
+from dotenv import load_dotenv
+from kasa import Discover, Credentials
+
+# Load environment variables from both possible locations
+load_dotenv()  # Current directory
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))  # src directory
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))  # parent directory
 
 class ActionType(Enum):
     TURN_ON = "turn_on"
@@ -219,13 +227,13 @@ class NaturalLanguageParser:
         return None
 
 class SmartPlugController:
-    """Interfaces with actual smart plug hardware"""
+    """Interfaces with actual smart plug hardware (Tapo P100 and Kasa devices)"""
     
     def __init__(self):
         # Mock smart plug states
         self.plug_states = {}
         self.device_registry = {
-            'kitchen_dishwasher': {'ip': '192.168.1.100', 'type': 'kasa', 'location': 'kitchen'},
+            'kitchen_dishwasher': {'ip': '172.20.10.4', 'type': 'tapo', 'location': 'kitchen'},
             'laundry_dryer': {'ip': '192.168.1.101', 'type': 'kasa', 'location': 'laundry'},
             'living_room_heater': {'ip': '192.168.1.102', 'type': 'kasa', 'location': 'living_room'},
             'garage_ev_charger': {'ip': '192.168.1.103', 'type': 'kasa', 'location': 'garage'},
@@ -241,6 +249,67 @@ class SmartPlugController:
         # Initialize all devices as off
         for device_id in self.device_registry.keys():
             self.plug_states[device_id] = False
+        
+        # Get credentials from environment
+        self.tapo_username = os.getenv('TAPO_USERNAME')
+        self.tapo_password = os.getenv('TAPO_PASSWORD')
+    
+    async def _control_tapo_device(self, ip: str, action: str) -> bool:
+        """
+        Control Tapo P100 using proper authentication
+        """
+        device = None
+        try:
+            print(f"🔍 Discovering Tapo P100 at {ip}...")
+            
+            # Create credentials object
+            if self.tapo_username and self.tapo_password:
+                credentials = Credentials(username=self.tapo_username, password=self.tapo_password)
+                print(f"🔐 Using credentials for user: {self.tapo_username}")
+            else:
+                print("⚠️  No Tapo credentials found in environment")
+                return False
+            
+            # Discover the device
+            device = await Discover.discover_single(ip, credentials=credentials)
+            
+            if not device:
+                print(f"❌ No Tapo device found at {ip}")
+                return False
+            
+            print(f"✅ Found Tapo device: {device.model}")
+            
+            # Connect to the device
+            try:
+                await device.update()
+                print(f"� Connected to Tapo device: {device.alias or 'Unnamed Device'}")
+            except Exception as update_error:
+                print(f"⚠️  Tapo connection issue: {update_error}")
+                print("Attempting to continue...")
+            
+            # Perform the action
+            if action == "on":
+                await device.turn_on()
+                await asyncio.sleep(1)  # Wait for state change
+                await device.update()
+                return device.is_on
+            elif action == "off":
+                await device.turn_off()
+                await asyncio.sleep(1)  # Wait for state change
+                await device.update()
+                return not device.is_on
+            else:
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error controlling Tapo device at {ip}: {e}")
+            return False
+        finally:
+            if device:
+                try:
+                    await device.disconnect()
+                except:
+                    pass
     
     async def turn_on_device(self, device_id: str) -> bool:
         """Turn on a smart plug device"""
@@ -249,21 +318,28 @@ class SmartPlugController:
                 print(f"Error: Device {device_id} not found in registry")
                 return False
                 
-            print(f"🔌 Turning ON {device_id}")
+            device_info = self.device_registry[device_id]
+            device_type = device_info.get('type', 'kasa')
+            ip = device_info['ip']
             
-            # Here you would integrate with actual smart plug APIs
-            # Example for TP-Link Kasa:
-            # from kasa import SmartPlug
-            # device_info = self.device_registry[device_id]
-            # plug = SmartPlug(device_info['ip'])
-            # await plug.update()
-            # await plug.turn_on()
+            print(f"🔌 Turning ON {device_id} ({device_type}) at {ip}")
             
-            # For demo purposes, we'll simulate the action
-            await asyncio.sleep(0.5)  # Simulate network delay
-            self.plug_states[device_id] = True
-            print(f"✅ Successfully turned ON {device_id}")
-            return True
+            if device_type == 'tapo':
+                # Use Tapo P100 control
+                success = await self._control_tapo_device(ip, "on")
+            else:
+                # For other devices, simulate the action (can be extended for actual Kasa devices)
+                print(f"🔄 Simulating turn ON for {device_type} device...")
+                await asyncio.sleep(0.5)  # Simulate network delay
+                success = True
+            
+            if success:
+                self.plug_states[device_id] = True
+                print(f"✅ Successfully turned ON {device_id}")
+            else:
+                print(f"❌ Failed to turn ON {device_id}")
+                
+            return success
             
         except Exception as e:
             print(f"❌ Error turning on {device_id}: {e}")
@@ -276,13 +352,28 @@ class SmartPlugController:
                 print(f"Error: Device {device_id} not found in registry")
                 return False
                 
-            print(f"🔌 Turning OFF {device_id}")
+            device_info = self.device_registry[device_id]
+            device_type = device_info.get('type', 'kasa')
+            ip = device_info['ip']
             
-            # Similar implementation for turning off
-            await asyncio.sleep(0.5)  # Simulate network delay
-            self.plug_states[device_id] = False
-            print(f"✅ Successfully turned OFF {device_id}")
-            return True
+            print(f"🔌 Turning OFF {device_id} ({device_type}) at {ip}")
+            
+            if device_type == 'tapo':
+                # Use Tapo P100 control
+                success = await self._control_tapo_device(ip, "off")
+            else:
+                # For other devices, simulate the action (can be extended for actual Kasa devices)
+                print(f"🔄 Simulating turn OFF for {device_type} device...")
+                await asyncio.sleep(0.5)  # Simulate network delay
+                success = True
+            
+            if success:
+                self.plug_states[device_id] = False
+                print(f"✅ Successfully turned OFF {device_id}")
+            else:
+                print(f"❌ Failed to turn OFF {device_id}")
+                
+            return success
             
         except Exception as e:
             print(f"❌ Error turning off {device_id}: {e}")

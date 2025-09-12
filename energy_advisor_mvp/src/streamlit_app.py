@@ -36,7 +36,7 @@ from forecast_consumption import ForecastConsumption
 
 # Import the smart agent components
 try:
-    from main import EnhancedSmartPlugAgent
+    from smart_plug_agent import SmartPlugAgent
     SMART_AGENT_AVAILABLE = True
 except Exception as e:
     SMART_AGENT_AVAILABLE = False
@@ -1323,7 +1323,7 @@ def show_smart_agent_scheduler_page():
     if SMART_AGENT_AVAILABLE and st.session_state['smart_agent'] is None:
         try:
             with st.spinner("🤖 Initializing Smart Agent..."):
-                st.session_state['smart_agent'] = EnhancedSmartPlugAgent()
+                st.session_state['smart_agent'] = SmartPlugAgent()
                 st.session_state['agent_status'] = "🟢 Ready"
             st.success("✅ Smart Agent initialized successfully!")
         except Exception as e:
@@ -1639,43 +1639,85 @@ def execute_smart_agent_command(command: str) -> Dict:
         if agent is not None and SMART_AGENT_AVAILABLE:
             # Handle different command types with the real agent
             if command.lower() == "status":
-                # Get comprehensive status from the real agent
-                result = run_async_command(agent, agent.get_comprehensive_status)
-                if result.get('error'):
-                    return {
-                        'success': False,
-                        'error': result['error'],
-                        'type': 'error'
-                    }
+                # Get system status from the real agent
+                status_data = agent.get_system_status()
+                
+                # Group devices by location for the display
+                devices_by_location = {}
+                for device in status_data['device_states']:
+                    location = device['location']
+                    if location not in devices_by_location:
+                        devices_by_location[location] = []
+                    
+                    # Add friendly name for display
+                    device_copy = device.copy()
+                    device_copy['friendly_name'] = device['device_id'].replace('_', ' ').title()
+                    device_copy['power_consumption'] = 0  # Default since we don't have real power monitoring yet
+                    devices_by_location[location].append(device_copy)
+                
+                # Count pending jobs
+                pending_jobs = len([job for job in status_data['scheduled_jobs'] if job.get('status') == 'pending'])
+                
+                # Format the response to match expected structure
+                formatted_data = {
+                    'summary': {
+                        'active_devices': status_data['active_devices'],
+                        'total_devices': status_data['total_devices'],
+                        'timestamp': status_data['timestamp'],
+                        'pending_jobs': pending_jobs,
+                        'power_usage': 0,  # Default since we don't have real power monitoring
+                        'power_limit': 15000,  # Default limit
+                        'llm_provider': 'direct'
+                    },
+                    'devices': status_data['device_states'],
+                    'devices_by_location': devices_by_location,
+                    'scheduled_jobs': status_data['scheduled_jobs'],
+                    'connected_devices': status_data['connected_devices']
+                }
                 
                 return {
                     'success': True,
                     'type': 'status',
-                    'data': result
+                    'data': formatted_data
                 }
             
             elif command.lower() == "recommendations":
-                # Get recommendations from the real agent
-                result = run_async_command(agent, agent.get_device_recommendations)
+                # Get basic recommendations
                 return {
                     'success': True,
                     'type': 'recommendations',
-                    'data': result if isinstance(result, list) else []
+                    'data': [
+                        "Consider scheduling dishwasher for off-peak hours",
+                        "Turn off devices when not needed",
+                        "Use timer-based scheduling for optimal savings"
+                    ]
                 }
             
             elif command.lower() == "emergency":
-                # Execute emergency shutdown
-                result = run_async_command(agent, agent.emergency_shutdown)
-                return {
-                    'success': result.get('success', False),
-                    'type': 'emergency',
-                    'message': 'Emergency shutdown completed' if result.get('success') else 'Emergency shutdown failed',
-                    'data': result
-                }
+                # Execute emergency shutdown (turn off all devices)
+                try:
+                    results = []
+                    for device_name in agent.parser.device_mappings.keys():
+                        success = run_async_command(agent, agent.turn_off_device_directly, device_name)
+                        results.append(f"{device_name}: {'OFF' if success else 'FAILED'}")
+                    
+                    return {
+                        'success': True,
+                        'type': 'emergency',
+                        'message': 'Emergency shutdown completed',
+                        'data': {'results': results}
+                    }
+                except Exception as e:
+                    return {
+                        'success': False,
+                        'type': 'emergency', 
+                        'message': f'Emergency shutdown failed: {e}',
+                        'data': {}
+                    }
             
             else:
                 # Process natural language command
-                result = run_async_command(agent, agent.process_natural_language_command, command)
+                result = run_async_command(agent, agent.process_llm_command, command)
                 
                 if result.get('success'):
                     return {
@@ -1793,7 +1835,17 @@ def display_command_result_horizontal(result: Dict):
             st.success("📊 **SYSTEM STATUS RETRIEVED**")
             
             data = result['data']
-            summary = data['summary']
+            
+            # Handle both old and new data formats
+            if 'summary' in data:
+                summary = data['summary']
+            else:
+                # Fallback for direct status data (compatibility)
+                summary = {
+                    'active_devices': data.get('active_devices', 0),
+                    'total_devices': data.get('total_devices', 0),
+                    'timestamp': data.get('timestamp', 'Unknown')
+                }
             
             # Main metrics in a large horizontal container
             st.markdown("### 🏠 **Smart Home System Status**")
@@ -1820,7 +1872,7 @@ def display_command_result_horizontal(result: Dict):
             with col3:
                 st.metric(
                     label="📅 **Pending Jobs**", 
-                    value=summary['pending_jobs'],
+                    value=summary.get('pending_jobs', 0),
                     help="Number of scheduled actions waiting"
                 )
             
@@ -1853,7 +1905,7 @@ def display_command_result_horizontal(result: Dict):
             
             # Devices by location in horizontal tabs
             st.markdown("### 🏠 **Devices by Location**")
-            devices_by_location = data['devices_by_location']
+            devices_by_location = data.get('devices_by_location', {})
             
             if devices_by_location:
                 tabs = st.tabs(list(devices_by_location.keys()))
