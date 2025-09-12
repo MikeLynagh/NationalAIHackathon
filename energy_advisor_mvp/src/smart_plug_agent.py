@@ -31,6 +31,13 @@ from threading import Thread
 from dotenv import load_dotenv
 from kasa import Discover, Credentials
 
+# Import LLM integration
+try:
+    from llm_integration import LLMManager, LLMResponse
+    LLM_AVAILABLE = True
+except ImportError:
+    LLM_AVAILABLE = False
+
 # Load environment variables from both possible locations
 load_dotenv()  # Current directory
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))  # src directory
@@ -507,11 +514,48 @@ class SmartPlugAgent:
         self.parser = NaturalLanguageParser()
         self.controller = SmartPlugController()
         self.scheduler = SmartPlugScheduler(self.controller)
+        
+        # Initialize LLM if available and API key is set
+        self.llm_manager = None
+        self.use_llm = False
+        
+        if LLM_AVAILABLE:
+            try:
+                # Check for API keys with proper prefix validation
+                openai_key = os.getenv('OPENAI_API_KEY')
+                anthropic_key = os.getenv('ANTHROPIC_API_KEY')
+                gemini_key = os.getenv('GEMINI_API_KEY')
+                
+                # Validate API keys with proper prefixes
+                valid_openai = (openai_key and openai_key.startswith('sk-') and len(openai_key) > 10)
+                valid_anthropic = (anthropic_key and 
+                                 (anthropic_key.startswith('sk-ant-') or 
+                                  (len(anthropic_key) > 20 and not anthropic_key.startswith('your') and 
+                                   anthropic_key != 'your_anthropic_key_here')))
+                valid_gemini = (gemini_key and gemini_key.startswith('AIza') and len(gemini_key) > 10)
+                
+                if valid_openai or valid_anthropic or valid_gemini:
+                    from llm_integration import LLMManager
+                    self.llm_manager = LLMManager()
+                    self.use_llm = True
+                    
+                    # Determine which provider to use
+                    if valid_gemini:
+                        print("🧠 LLM integration enabled with Gemini API")
+                    elif valid_openai:
+                        print("🧠 LLM integration enabled with OpenAI API")
+                    elif valid_anthropic:
+                        print("🧠 LLM integration enabled with Anthropic API")
+                else:
+                    print("⚠️ No valid API keys found - using direct pattern matching")
+            except Exception as e:
+                print(f"⚠️ LLM initialization failed: {e} - using direct pattern matching")
+        
         print("🤖 Smart Plug Agent initialized")
         
     async def process_llm_command(self, llm_output: str) -> Dict:
         """
-        Process a command from LLM output
+        Process a command from LLM output or direct user input
         
         Args:
             llm_output: Natural language command like "Set dishwasher at 14:00"
@@ -521,7 +565,28 @@ class SmartPlugAgent:
         """
         print(f"\n🎯 Processing command: '{llm_output}'")
         
-        # Parse the command
+        # First try LLM if available and enabled
+        if self.use_llm and self.llm_manager:
+            try:
+                print("🧠 Using LLM for command interpretation...")
+                
+                # Use LLM to interpret the command
+                llm_response = await self.llm_manager.process_command(llm_output)
+                
+                if llm_response.success:
+                    # Parse LLM response into SmartPlugCommand
+                    command = self._parse_llm_response(llm_response, llm_output)
+                    if command:
+                        return await self._execute_command(command, llm_output, use_llm=True, llm_confidence=llm_response.confidence)
+                    else:
+                        print("⚠️ LLM response could not be converted to command, falling back to direct parsing")
+                else:
+                    print("⚠️ LLM processing failed, falling back to direct parsing")
+            except Exception as e:
+                print(f"⚠️ LLM processing error: {e}, falling back to direct parsing")
+        
+        # Fallback to direct parsing
+        print("🔍 Using direct pattern matching...")
         command = self.parser.parse_command(llm_output)
         
         if not command:
@@ -530,8 +595,97 @@ class SmartPlugAgent:
             return {
                 'success': False,
                 'error': error_msg,
-                'original_command': llm_output
+                'original_command': llm_output,
+                'parsing_method': 'direct',
+                'llm_confidence': 0.0
             }
+        
+        return await self._execute_command(command, llm_output, use_llm=False, llm_confidence=0.0)
+    
+    def _parse_llm_response(self, llm_response, original_command: str) -> Optional[SmartPlugCommand]:
+        """Convert LLM response to SmartPlugCommand"""
+        try:
+            intent = llm_response.intent.lower() if llm_response.intent else ''
+            device_name = llm_response.device.lower() if llm_response.device else ''
+            time_str = llm_response.time
+            
+            # Map device name to our internal mapping
+            device_id = None
+            if device_name:
+                device_id = self.parser.device_mappings.get(device_name)
+                if not device_id:
+                    # Try fuzzy matching
+                    for key, value in self.parser.device_mappings.items():
+                        if device_name in key or key in device_name:
+                            device_id = value
+                            break
+            
+            if not device_id:
+                print(f"❌ Device '{device_name}' not found in device mappings")
+                return None
+            
+            # Determine action type
+            action = None
+            if intent == 'turn_on':
+                action = ActionType.TURN_ON
+            elif intent == 'turn_off':
+                action = ActionType.TURN_OFF
+            elif intent == 'schedule':
+                action = ActionType.SET_SCHEDULE
+            else:
+                action = ActionType.SET_SCHEDULE  # Default for commands with time
+            
+            # Parse time if provided
+            scheduled_time = None
+            if time_str:
+                scheduled_time = self._parse_time_from_llm(time_str)
+            
+            return SmartPlugCommand(
+                device_name=device_id,
+                action=action,
+                scheduled_time=scheduled_time
+            )
+            
+        except Exception as e:
+            print(f"❌ Error parsing LLM response: {e}")
+            return None
+    
+    def _parse_time_from_llm(self, time_str: str) -> Optional[datetime]:
+        """Parse time string from LLM response"""
+        try:
+            time_str = time_str.lower().strip()
+            now = datetime.now()
+            
+            # Handle various time formats
+            if ':' in time_str:
+                # Format like "14:00" or "2:00"
+                time_parts = time_str.replace('pm', '').replace('am', '').strip().split(':')
+                if len(time_parts) == 2:
+                    hour = int(time_parts[0])
+                    minute = int(time_parts[1])
+                    
+                    # Handle AM/PM
+                    if 'pm' in time_str and hour != 12:
+                        hour += 12
+                    elif 'am' in time_str and hour == 12:
+                        hour = 0
+                    
+                    scheduled_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                    
+                    # If time has passed today, schedule for tomorrow
+                    if scheduled_time <= now:
+                        scheduled_time += timedelta(days=1)
+                    
+                    return scheduled_time
+            
+            return None
+        except Exception as e:
+            print(f"❌ Error parsing time '{time_str}': {e}")
+            return None
+    
+    async def _execute_command(self, command: SmartPlugCommand, original_command: str, use_llm: bool = False, llm_confidence: float = 0.0) -> Dict:
+        """Execute the parsed command"""
+        parsing_method = 'llm' if use_llm else 'direct'
         
         # Execute based on whether it's immediate or scheduled
         if command.scheduled_time and command.scheduled_time > datetime.now():
@@ -544,13 +698,17 @@ class SmartPlugAgent:
                     'job_id': job_id,
                     'device': command.device_name,
                     'scheduled_for': command.scheduled_time.isoformat(),
-                    'original_command': llm_output
+                    'original_command': original_command,
+                    'parsing_method': parsing_method,
+                    'llm_confidence': llm_confidence
                 }
             else:
                 return {
                     'success': False,
                     'error': 'Failed to schedule action',
-                    'original_command': llm_output
+                    'original_command': original_command,
+                    'parsing_method': parsing_method,
+                    'llm_confidence': llm_confidence
                 }
         else:
             # Execute immediately
@@ -566,7 +724,9 @@ class SmartPlugAgent:
                 'success': success,
                 'action': 'executed_immediately',
                 'device': command.device_name,
-                'original_command': llm_output
+                'original_command': original_command,
+                'parsing_method': parsing_method,
+                'llm_confidence': llm_confidence
             }
     
     def get_system_status(self) -> Dict:

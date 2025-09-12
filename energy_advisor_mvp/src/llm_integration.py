@@ -542,23 +542,49 @@ Respond with JSON only, no explanations."""
         if any(phrase in user_input for phrase in ["stop all", "turn off all", "shut down all", "off all"]):
             return '{"intent": "turn_off", "device": "all", "action": "off", "time": null, "confidence": 0.9}'
         
-        if "turn on" in user_input or "switch on" in user_input:
+        if "turn on" in user_input or "switch on" in user_input or "start" in user_input:
             if "lights" in user_input:
                 return '{"intent": "turn_on", "device": "lights", "action": "on", "time": null, "confidence": 0.95}'
+            elif "dishwasher" in user_input:
+                return '{"intent": "turn_on", "device": "dishwasher", "action": "on", "time": null, "confidence": 0.95}'
             elif "coffee" in user_input:
-                return '{"intent": "turn_on", "device": "coffee_maker", "action": "on", "time": null, "confidence": 0.94}'
+                return '{"intent": "turn_on", "device": "coffee maker", "action": "on", "time": null, "confidence": 0.94}'
             elif "heater" in user_input:
                 return '{"intent": "turn_on", "device": "heater", "action": "on", "time": null, "confidence": 0.93}'
+            elif "dryer" in user_input:
+                return '{"intent": "turn_on", "device": "dryer", "action": "on", "time": null, "confidence": 0.93}'
+            elif "ev" in user_input or "charger" in user_input:
+                return '{"intent": "turn_on", "device": "ev charger", "action": "on", "time": null, "confidence": 0.93}'
         elif "turn off" in user_input or "switch off" in user_input or "stop" in user_input:
             if "lights" in user_input:
                 return '{"intent": "turn_off", "device": "lights", "action": "off", "time": null, "confidence": 0.95}'
+            elif "dishwasher" in user_input:
+                return '{"intent": "turn_off", "device": "dishwasher", "action": "off", "time": null, "confidence": 0.95}'
             elif "heater" in user_input:
                 return '{"intent": "turn_off", "device": "heater", "action": "off", "time": null, "confidence": 0.93}'
-        elif "schedule" in user_input:
-            if "dishwasher" in user_input and "2pm" in user_input:
-                return '{"intent": "schedule", "device": "dishwasher", "action": "schedule", "time": "14:00", "confidence": 0.92}'
-            elif "dryer" in user_input and "4pm" in user_input:
-                return '{"intent": "schedule", "device": "dryer", "action": "schedule", "time": "16:00", "confidence": 0.92}'
+            elif "dryer" in user_input:
+                return '{"intent": "turn_off", "device": "dryer", "action": "off", "time": null, "confidence": 0.93}'
+        elif "set" in user_input or "schedule" in user_input:
+            if "dishwasher" in user_input:
+                if any(time_phrase in user_input for time_phrase in ["14:00", "2pm", "2 pm"]):
+                    return '{"intent": "schedule", "device": "dishwasher", "action": "schedule", "time": "14:00", "confidence": 0.92}'
+                else:
+                    return '{"intent": "schedule", "device": "dishwasher", "action": "schedule", "time": null, "confidence": 0.85}'
+            elif "coffee" in user_input:
+                if any(time_phrase in user_input for time_phrase in ["7:00", "7am", "7 am"]):
+                    return '{"intent": "schedule", "device": "coffee maker", "action": "schedule", "time": "7:00", "confidence": 0.92}'
+                else:
+                    return '{"intent": "schedule", "device": "coffee maker", "action": "schedule", "time": null, "confidence": 0.85}'
+            elif "dryer" in user_input:
+                if any(time_phrase in user_input for time_phrase in ["16:00", "4pm", "4 pm"]):
+                    return '{"intent": "schedule", "device": "dryer", "action": "schedule", "time": "16:00", "confidence": 0.92}'
+                else:
+                    return '{"intent": "schedule", "device": "dryer", "action": "schedule", "time": null, "confidence": 0.85}'
+            elif "heater" in user_input:
+                if any(time_phrase in user_input for time_phrase in ["18:00", "6pm", "6 pm"]):
+                    return '{"intent": "schedule", "device": "heater", "action": "schedule", "time": "18:00", "confidence": 0.92}'
+                else:
+                    return '{"intent": "schedule", "device": "heater", "action": "schedule", "time": null, "confidence": 0.85}'
         
         return '{"intent": "unknown", "device": null, "action": null, "time": null, "confidence": 0.2}'
     
@@ -607,9 +633,10 @@ class LLMManager:
         
         logger.info(f"LLM Manager initialized with primary provider: {primary_provider}")
         
-        # Log which providers have valid API keys
+        # Log which providers have valid API keys with proper prefix validation
         for name, provider in self.providers.items():
-            if hasattr(provider, 'api_key') and provider.api_key and not provider.api_key.startswith('your-'):
+            has_valid_key = self._validate_api_key(name, provider)
+            if has_valid_key:
                 logger.info(f"✅ {name.title()} provider ready with API key")
             else:
                 logger.warning(f"⚠️  {name.title()} provider using mock responses (no API key)")
@@ -618,6 +645,30 @@ class LLMManager:
         if primary_provider not in self.providers:
             logger.warning(f"Primary provider '{primary_provider}' not found, falling back to first available")
             self.primary_provider = list(self.providers.keys())[0]
+    
+    def _validate_api_key(self, provider_name: str, provider) -> bool:
+        """Validate API key format for each provider"""
+        if not hasattr(provider, 'api_key') or not provider.api_key:
+            return False
+        
+        api_key = provider.api_key.strip()
+        
+        if provider_name == 'openai':
+            # OpenAI keys start with sk- (historical) or sk-proj- (newer project keys)
+            return api_key.startswith('sk-') and len(api_key) > 10
+        elif provider_name == 'anthropic':
+            # Anthropic keys start with sk-ant- (admin keys documented)
+            # For regular keys, we'll accept any non-placeholder key that's substantial
+            return (api_key.startswith('sk-ant-') or 
+                   (len(api_key) > 20 and not api_key.startswith('your') and api_key != 'your_anthropic_key_here'))
+        elif provider_name == 'gemini':
+            # Google/Gemini API keys commonly start with AIza
+            return api_key.startswith('AIza') and len(api_key) > 10
+        else:
+            # For unknown providers, just check it's not a placeholder
+            return (len(api_key) > 10 and 
+                   not api_key.startswith('your') and 
+                   api_key not in ['your_openai_key_here', 'your_anthropic_key_here', 'your_gemini_key_here'])
     
     async def process_command(self, user_input: str, provider: str = None) -> LLMResponse:
         """Process command using specified or primary provider"""
