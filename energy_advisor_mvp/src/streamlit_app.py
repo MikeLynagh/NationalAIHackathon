@@ -701,20 +701,19 @@ def show_cost_analysis_page():
     if df is None or df.empty:
         st.error("❌ No data available for cost analysis.")
         return
-
-    st.subheader("⚡ Forecasted Energy Consumption (Next 30 Days)")
-
-    forecast = ForecastConsumption()
-    forecast_result = forecast.run_forecast_modelling(df)
-    fig = px.line(
-                forecast_result,
-                x='timestamp',
-                y='import_kw',
-                title='Forecasted Energy Consumption (Next 30 Days, 30-min Intervals)',
-                labels={'future_datetime': 'Datetime', 'forecasted_consumption': 'Forecasted Consumption (kWh)'},
-                template='plotly_dark'
-            )
-    st.plotly_chart(fig, use_container_width=True)
+    with st.spinner("Forecasting in progress..."):
+        st.subheader("⚡ Forecasted Energy Consumption (Next 30 Days)")
+        forecast = ForecastConsumption()
+        forecast_result = forecast.run_forecast_modelling(df)
+        fig = px.line(
+                    forecast_result,
+                    x='timestamp',
+                    y='import_kw',
+                    title='Forecasted Energy Consumption (Next 30 Days, 30-min Intervals)',
+                    labels={'future_datetime': 'Datetime', 'forecasted_consumption': 'Forecasted Consumption (kWh)'},
+                    template='plotly_dark'
+                )
+        st.plotly_chart(fig, use_container_width=True)
 
     # Rate input section
     st.subheader("⚡ Enter Your Electricity Rate")
