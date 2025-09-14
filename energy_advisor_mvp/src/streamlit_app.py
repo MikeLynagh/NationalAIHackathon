@@ -99,8 +99,8 @@ def main():
         "Please Select",
         [
             "📊 Data Upload & Analysis",
+            "📈 Usage Patterns",
             "💡 Suggested Tariff Plan",
-            "💰 Usage Patterns",
             "💰 Forecast & Cost Analysis",
             "🔍 Appliance Detection",
             "💡 Recommendations",
@@ -112,7 +112,7 @@ def main():
         show_data_upload_page()
     elif page == "💡 Suggested Tariff Plan":
         tariff_comparison_page()
-    elif page == "💰 Usage Patterns":
+    elif page == "📈 Usage Patterns":
         show_usage_patterns_page()
     elif page == "💰 Forecast & Cost Analysis":
         show_cost_analysis_page()
