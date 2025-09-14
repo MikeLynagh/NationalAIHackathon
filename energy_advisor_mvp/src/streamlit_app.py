@@ -142,17 +142,23 @@ def show_data_upload_page():
     # The slider will be in the first column (col1) and the file uploader in the second (col2)
 
     st.subheader("Select Data Type")
-    # Slider to select between Urban and Rural data
-    selected_type = st.select_slider(
-        "Select the data's geographic type:",
-        options=['urban', 'rural'],
-        help="This setting affects subsequent analysis and calculations."
-    )
-    # Store the selected value in session state
-    st.session_state['type'] = selected_type
+    st.markdown("Select your geographic location. this affects future calculations and cost analysis.")
 
-    st.info(f"You have selected: **{st.session_state['type']}**")
+    col1, col2 = st.columns(2)
 
+    with col1:
+        if st.button("🏙️ Urban", use_container_width=True, type="primary" if st.session_state.get('type') == 'urban' else "secondary"):
+            st.session_state['type'] = 'urban'
+
+    with col2:
+        if st.button("🌾 Rural", use_container_width=True, type="primary" if st.session_state.get('type') == 'rural' else "secondary"):
+            st.session_state['type'] = 'rural'
+
+    # Initialize default if not set 
+    if 'type' not in st.session_state:
+        st.session_state['type'] = 'urban'
+
+    st.info(f"You have selected: **{st.session_state['type'].title()}**")
     uploaded_file = st.file_uploader(
         "Choose a CSV file", type=["csv"], help="Upload your MPRN smart meter data file"
     )
