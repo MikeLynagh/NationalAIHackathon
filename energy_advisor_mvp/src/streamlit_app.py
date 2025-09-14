@@ -158,7 +158,7 @@ def show_data_upload_page():
     if 'type' not in st.session_state:
         st.session_state['type'] = 'urban'
 
-    st.info(f"You have selected: **{st.session_state['type'].title()}**")
+        st.info(f"You have selected: **{st.session_state['type'].title()}**")
     uploaded_file = st.file_uploader(
         "Choose a CSV file", type=["csv"], help="Upload your MPRN smart meter data file"
     )
@@ -177,9 +177,6 @@ def show_data_upload_page():
                 
                 st.session_state["uploaded_file"] = uploaded_file.name
 
-                # Show data preview
-                st.subheader("📋 Data Preview")
-                st.dataframe(df.head(10), use_container_width=True)
 
                 # Show basic statistics
                 show_basic_statistics(df)
@@ -212,42 +209,34 @@ def show_data_upload_page():
                     st.write(f"**Columns found:** {list(df.columns)}")
                     st.write(f"**Data shape:** {df.shape}")
 
-                    st.subheader("📋 Sample Data Preview")
-                    st.dataframe(df.head(10), width="stretch")
+
 
                     # Show basic statistics
                     show_basic_statistics(df)
 
                     # Show validation results for sample data
-                    st.subheader("🔍 Sample Data Validation")
-                    try:
-                        with open(sample_path, "r") as f:
-                            validation_results = validate_mprn_data(f)
+                    if validation_results["is_valid"]:
+                        st.success("✅ Sample data validation passed!")
+                        col1, col2 = st.columns(2)
 
-                        if validation_results["is_valid"]:
-                            st.success("✅ Sample data validation passed!")
-                            col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**Validation Details:**")
+                            for key, value in validation_results.items():
+                                if key != "is_valid" and key != "errors":
+                                    st.write(f"- {key}: {value}")
 
-                            with col1:
-                                st.write("**Validation Details:**")
-                                for key, value in validation_results.items():
-                                    if key != "is_valid" and key != "errors":
-                                        st.write(f"- {key}: {value}")
-
-                            with col2:
-                                if validation_results.get("errors"):
-                                    st.warning("⚠️ Validation Warnings:")
-                                    for error in validation_results["errors"]:
-                                        st.write(f"- {error}")
-                        else:
-                            st.error("❌ Sample data validation failed!")
-                            for error in validation_results.get("errors", []):
-                                st.error(f"- {error}")
-                    except Exception as e:
-                        st.warning(f"⚠️ Validation check failed: {str(e)}")
-                        st.info(
-                            "This is normal for sample data - the parser will handle it automatically."
-                        )
+                        with col2:
+                            if validation_results.get("errors"):
+                                st.warning("⚠️ Validation Warnings:")
+                                for error in validation_results["errors"]:
+                                    st.write(f"- {error}")
+                    else:
+                        st.error("❌ Sample data validation failed!")
+                        for error in validation_results.get("errors", []):
+                            st.error(f"- {error}")
+                    st.info(
+                        "This is normal for sample data - the parser will handle it automatically."
+                    )
                 else:
                     st.error("❌ Failed to load 24-hour sample data.")
             else:
@@ -273,8 +262,7 @@ def show_data_upload_page():
                     st.write(f"**Columns found:** {list(df.columns)}")
                     st.write(f"**Data shape:** {df.shape}")
 
-                    st.subheader("📋 Sample Data Preview")
-                    st.dataframe(df.head(10), width="stretch")
+
 
                     # Show basic statistics
                     show_basic_statistics(df)
@@ -488,9 +476,6 @@ def show_basic_statistics(df):
             f"**Start:** {date_range['min'].strftime('%Y-%m-%d %H:%M')} | **End:** {date_range['max'].strftime('%Y-%m-%d %H:%M')}"
         )
 
-    # Show first few rows for debugging
-    st.subheader("🔍 Raw Data Sample")
-    st.dataframe(df.head(5), width="stretch")
 
 
 def show_validation_results(uploaded_file):
