@@ -91,12 +91,12 @@ st.set_page_config(
 
 def main():
     """Main application function"""
-    st.title("⚡ Energy Advisor MVP")
+    st.title("⚡ Energy Advisor")
     st.markdown("**Personal energy analyzer for Irish MPRN smart meter data**")
 
-    # Sidebar for navigation
-    page = st.sidebar.selectbox(
-        "Navigation",
+    # Sidebar for navigation with radio buttons
+    page = st.sidebar.radio(
+        "Please Select",
         [
             "📊 Data Upload & Analysis",
             "💡 Suggested Tariff Plan",
@@ -133,12 +133,10 @@ def show_data_upload_page():
     st.markdown(
         """
     Upload your Irish MPRN smart meter data file (CSV format).
-    The file should contain columns: MPRN, Meter Serial Number, Read Value, Read Type, Read Date and End Time
+    The file should contain columns: MPRN, Meter Serial Number, Read Value, Read Type, Read Date and End Time \n
+    ℹ️ Click [here](https://www.youtube.com/watch?v=vtoMLLQMRL4) if you want to download your MPRN data
     """
     )
-
-    """Data upload and initial analysis page"""
-    st.header("📊 Data Upload & Analysis")
 
     # Use columns to place the slider and file uploader side-by-side
     # The slider will be in the first column (col1) and the file uploader in the second (col2)
