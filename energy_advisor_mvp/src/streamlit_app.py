@@ -982,69 +982,273 @@ def show_appliance_detection_page():
         st.subheader("📊 Detected Appliance Usage")
 
         appliance_insights_prompt = get_appliance_insights(appliance_segments)
-
         st.session_state["appliance_insights_prompt"] = appliance_insights_prompt
 
-        # Create timeline chart using plotly
+        # Create enhanced timeline chart using plotly
         fig = go.Figure()
 
         # Color map for different appliances
         colors = px.colors.qualitative.Set3
-
-        # Get unique appliances
         unique_appliances = list(set(segment["appliance_name"] for segment in appliance_segments))
         color_map = dict(zip(unique_appliances, colors[:len(unique_appliances)]))
 
-        for segment in appliance_segments:
-            fig.add_trace(go.Bar(
-                x=[segment["start_time"], segment["end_time"]],
-                y=[segment["appliance_name"], segment["appliance_name"]],
-                orientation="h",
-                name=segment["appliance_name"],
-                marker_color=color_map[segment["appliance_name"]],
-                showlegend=False
-            ))
+        # Create Gantt-style timeline using proper datetime handling
+        timeline_data = []
+        for i, segment in enumerate(appliance_segments):
+            start_time = pd.to_datetime(segment["start_time"])
+            end_time = pd.to_datetime(segment["end_time"])
+            duration_hours = (end_time - start_time).total_seconds() / 3600
+            
+            timeline_data.append({
+                'Task': segment["appliance_name"],
+                'Start': start_time,
+                'Finish': end_time,
+                'Duration': duration_hours,
+                'Index': i
+            })
 
+        # Convert to DataFrame for easier handling
+        timeline_df = pd.DataFrame(timeline_data)
+        
+        # Create the Gantt chart using Scatter traces
+        for appliance in unique_appliances:
+            appliance_data = timeline_df[timeline_df['Task'] == appliance]
+            
+            for _, row in appliance_data.iterrows():
+                fig.add_trace(go.Scatter(
+                    x=[row['Start'], row['Finish'], row['Finish'], row['Start'], row['Start']],
+                    y=[appliance, appliance, appliance, appliance, appliance],
+                    fill='toself',
+                    fillcolor=color_map[appliance],
+                    line=dict(color=color_map[appliance], width=2),
+                    mode='lines',
+                    name=appliance,
+                    showlegend=appliance not in [trace.name for trace in fig.data],
+                    hovertemplate=(
+                        f"<b>{appliance}</b><br>" +
+                        f"Start: {row['Start'].strftime('%Y-%m-%d %H:%M:%S')}<br>" +
+                        f"End: {row['Finish'].strftime('%Y-%m-%d %H:%M:%S')}<br>" +
+                        f"Duration: {row['Duration']:.2f} hours<br>" +
+                        "<extra></extra>"
+                    )
+                ))
+
+        # Update layout for better timeline visualization
         fig.update_layout(
-            title="Appliance Usage Timeline",
+            title="Appliance Usage Timeline - Hover for details, use toolbar to zoom and pan",
             xaxis_title="Time",
-            yaxis_title="Appliance",
-            height=400,
-            barmode="overlay"
+            yaxis_title="Appliances",
+            height=500,
+            xaxis=dict(
+                type="date",
+                tickformat="%m-%d %H:%M",
+                tickangle=45,
+                rangeslider=dict(visible=True, thickness=0.1),  # Enable range slider for zooming
+                rangeselector=dict(
+                    buttons=list([
+                        dict(count=1, label="1D", step="day", stepmode="backward"),
+                        dict(count=7, label="7D", step="day", stepmode="backward"),
+                        dict(count=30, label="30D", step="day", stepmode="backward"),
+                        dict(step="all", label="All")
+                    ]),
+                    x=0,
+                    y=1.02,
+                    xanchor="left",
+                    yanchor="top"
+                )
+            ),
+            yaxis=dict(
+                categoryorder="array",
+                categoryarray=unique_appliances
+            ),
+            hovermode='closest',
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # Display summary table
-        st.subheader("📋 Usage Summary")
-        summary_data = []
-        for appliance in unique_appliances:
-            appliance_times = [
-                segment for segment in appliance_segments 
-                if segment["appliance_name"] == appliance
-            ]
-            total_duration = sum(
-                (segment["end_time"] - segment["start_time"]).total_seconds() / 3600 
-                for segment in appliance_times
-            )
-            usage_count = len(appliance_times)
-            
-            summary_data.append({
-                "Appliance": appliance,
-                "Usage Count": usage_count,
-                "Total Hours": f"{total_duration:.2f}"
-            })
+        # Create two columns for summary and recommendations
+        col1, col2 = st.columns([1, 1])
 
-        st.dataframe(
-            pd.DataFrame(summary_data),
-            use_container_width=True,
-            hide_index=True
-        )
+        with col1:
+            # Display summary table
+            st.subheader("📋 Usage Summary")
+            summary_data = []
+            for appliance in unique_appliances:
+                appliance_times = [
+                    segment for segment in appliance_segments 
+                    if segment["appliance_name"] == appliance
+                ]
+                total_duration = sum(
+                    (segment["end_time"] - segment["start_time"]).total_seconds() / 3600 
+                    for segment in appliance_times
+                )
+                usage_count = len(appliance_times)
+                
+                summary_data.append({
+                    "Appliance": appliance,
+                    "Usage Count": usage_count,
+                    "Total Hours": f"{total_duration:.2f}",
+                    "Avg Duration": f"{total_duration/usage_count:.2f}h" if usage_count > 0 else "0h"
+                })
+
+            st.dataframe(
+                pd.DataFrame(summary_data),
+                use_container_width=True,
+                hide_index=True
+            )
+
+        with col2:
+            # Appliance recommendations
+            st.subheader("💡 Energy-Efficient Appliance Recommendations")
+            
+            # Define appliance recommendations with links
+            appliance_recommendations = {
+                "dishwasher": {
+                    "title": "Energy-Efficient Dishwashers",
+                    "description": "Save up to 30% on energy costs",
+                    "links": [
+                        {"name": "ENERGY STAR Certified Dishwashers", "url": "https://www.energystar.gov/products/appliances/dishwashers"},
+                        {"name": "Bosch 300 Series", "url": "https://www.bosch-home.com/us/products/dishwashers"},
+                        {"name": "Miele G 4998 SCVi", "url": "https://www.mieleusa.com/domestic/dishwashers-1454.htm"}
+                    ]
+                },
+                "washing_machine": {
+                    "title": "High-Efficiency Washing Machines",
+                    "description": "Reduce water and energy usage by 40%",
+                    "links": [
+                        {"name": "ENERGY STAR Washing Machines", "url": "https://www.energystar.gov/products/appliances/clothes_washers"},
+                        {"name": "LG WM3900HWA", "url": "https://www.lg.com/us/washers"},
+                        {"name": "Samsung WF45R6100AP", "url": "https://www.samsung.com/us/home-appliances/washers/"}
+                    ]
+                },
+                "dryer": {
+                    "title": "Energy-Efficient Dryers",
+                    "description": "Heat pump dryers use 50% less energy",
+                    "links": [
+                        {"name": "ENERGY STAR Dryers", "url": "https://www.energystar.gov/products/appliances/clothes_dryers"},
+                        {"name": "Whirlpool WED7120HC", "url": "https://www.whirlpool.com/laundry/dryers/"},
+                        {"name": "GE GTD33EASKWW", "url": "https://www.geappliances.com/appliance/GE-7-2-Cu-Ft-Capacity-aluminized-alloy-drum-Electric-Dryer-GTD33EASKWW"}
+                    ]
+                },
+                "refrigerator": {
+                    "title": "Energy-Efficient Refrigerators",
+                    "description": "Modern fridges use 75% less energy than older models",
+                    "links": [
+                        {"name": "ENERGY STAR Refrigerators", "url": "https://www.energystar.gov/products/appliances/refrigerators"},
+                        {"name": "LG LTCS24223S", "url": "https://www.lg.com/us/refrigerators"},
+                        {"name": "Samsung RF23R6201SR", "url": "https://www.samsung.com/us/home-appliances/refrigerators/"}
+                    ]
+                },
+                "boiler": {
+                    "title": "High-Efficiency Boilers",
+                    "description": "Condensing boilers can achieve 90%+ efficiency",
+                    "links": [
+                        {"name": "Worcester Bosch Greenstar", "url": "https://www.worcester-bosch.co.uk/products/boilers"},
+                        {"name": "Viessmann Vitodens", "url": "https://www.viessmann.ie/en/residential/products/boilers.html"},
+                        {"name": "Baxi EcoBlue Advance", "url": "https://www.baxi.co.uk/products/boilers"}
+                    ]
+                },
+                "radiator": {
+                    "title": "Smart Heating Controls & Radiators",
+                    "description": "Smart TRVs can reduce heating costs by 20%",
+                    "links": [
+                        {"name": "Nest Smart Thermostat", "url": "https://store.google.com/ie/product/nest_thermostat"},
+                        {"name": "Drayton Wiser Smart TRVs", "url": "https://wiser.draytoncontrols.co.uk/smart-radiator-thermostats"},
+                        {"name": "Honeywell evohome", "url": "https://www.honeywellhome.com/ie/en/products/heating/zoning/evohome"}
+                    ]
+                }
+            }
+
+            # Show recommendations for detected appliances
+            detected_appliance_types = set()
+            for appliance_name in unique_appliances:
+                appliance_lower = appliance_name.lower()
+                if any(keyword in appliance_lower for keyword in ["dishwasher", "dish"]):
+                    detected_appliance_types.add("dishwasher")
+                elif any(keyword in appliance_lower for keyword in ["washing", "washer", "wash"]):
+                    detected_appliance_types.add("washing_machine")
+                elif any(keyword in appliance_lower for keyword in ["dryer", "dry"]):
+                    detected_appliance_types.add("dryer")
+                elif any(keyword in appliance_lower for keyword in ["refrigerator", "fridge", "ref"]):
+                    detected_appliance_types.add("refrigerator")
+                elif any(keyword in appliance_lower for keyword in ["boiler"]):
+                    detected_appliance_types.add("boiler")
+                elif any(keyword in appliance_lower for keyword in ["radiator", "heating"]):
+                    detected_appliance_types.add("radiator")
+
+            # If no specific appliances detected, show all recommendations
+            if not detected_appliance_types:
+                detected_appliance_types = set(appliance_recommendations.keys())
+
+            # Display recommendation cards
+            for appliance_type in detected_appliance_types:
+                if appliance_type in appliance_recommendations:
+                    rec = appliance_recommendations[appliance_type]
+                    
+                    with st.container():
+                        st.markdown(f"""
+                        <div style="
+                            border: 1px solid #e0e0e0;
+                            border-radius: 10px;
+                            padding: 15px;
+                            margin-bottom: 15px;
+                            background-color: #f8f9fa;
+                        ">
+                            <h4 style="color: #2e7d32; margin-bottom: 10px;">{rec['title']}</h4>
+                            <p style="color: #666; margin-bottom: 15px;">{rec['description']}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Add links
+                        for link in rec['links']:
+                            st.markdown(f"🔗 [{link['name']}]({link['url']})")
+                        
+                        st.markdown("---")
+
+        # Daily and Monthly Analysis
+        st.subheader("📅 Usage Analysis by Time Period")
+        
+        # Convert segments to DataFrame for analysis
+        segments_df = pd.DataFrame(appliance_segments)
+        segments_df['duration_hours'] = (segments_df['end_time'] - segments_df['start_time']).dt.total_seconds() / 3600
+        segments_df['date'] = segments_df['start_time'].dt.date
+        segments_df['hour'] = segments_df['start_time'].dt.hour
+        segments_df['month'] = segments_df['start_time'].dt.to_period('M')
+
+        # Time period analysis tabs
+        tab1, tab2, tab3 = st.tabs(["📊 Daily Usage", "📈 Hourly Patterns", "📆 Monthly Trends"])
+        
+        with tab1:
+            daily_usage = segments_df.groupby(['date', 'appliance_name'])['duration_hours'].sum().reset_index()
+            fig_daily = px.bar(daily_usage, x='date', y='duration_hours', color='appliance_name',
+                             title="Daily Appliance Usage", labels={'duration_hours': 'Hours Used'})
+            fig_daily.update_layout(xaxis_title="Date", yaxis_title="Hours")
+            st.plotly_chart(fig_daily, use_container_width=True)
+        
+        with tab2:
+            hourly_usage = segments_df.groupby(['hour', 'appliance_name'])['duration_hours'].sum().reset_index()
+            fig_hourly = px.bar(hourly_usage, x='hour', y='duration_hours', color='appliance_name',
+                              title="Hourly Usage Patterns", labels={'duration_hours': 'Total Hours Used'})
+            fig_hourly.update_layout(xaxis_title="Hour of Day", yaxis_title="Total Hours")
+            st.plotly_chart(fig_hourly, use_container_width=True)
+        
+        with tab3:
+            if len(segments_df['month'].unique()) > 1:
+                monthly_usage = segments_df.groupby(['month', 'appliance_name'])['duration_hours'].sum().reset_index()
+                monthly_usage['month'] = monthly_usage['month'].astype(str)
+                fig_monthly = px.line(monthly_usage, x='month', y='duration_hours', color='appliance_name',
+                                    title="Monthly Usage Trends", labels={'duration_hours': 'Total Hours Used'})
+                fig_monthly.update_layout(xaxis_title="Month", yaxis_title="Total Hours")
+                st.plotly_chart(fig_monthly, use_container_width=True)
+            else:
+                st.info("📝 Monthly trends require data spanning multiple months.")
 
     except Exception as e:
         st.error(f"❌ Error in appliance detection: {str(e)}")
         st.exception(e)
-
+        
 def show_recommendations_page():
     """AI-powered recommendations page"""
     st.header("💡 AI-Powered Energy Saving Recommendations")
