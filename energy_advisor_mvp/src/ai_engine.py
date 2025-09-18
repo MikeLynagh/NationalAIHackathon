@@ -29,10 +29,12 @@ except ImportError:
     ANTHROPIC_AVAILABLE = False
 
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
 
     GEMINI_AVAILABLE = True
 except ImportError:
+    print("google.generativeai not available")
     GEMINI_AVAILABLE = False
 
 
@@ -44,7 +46,7 @@ logger = logging.getLogger(__name__)
 class AIEngine:
     """AI-powered analysis engine for energy usage patterns."""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-1.5-pro"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.5-pro"):
         """
         Initialize AI engine.
 
@@ -53,8 +55,9 @@ class AIEngine:
             model: Model to use (gpt-4, claude-3-sonnet, etc.)
         """
         self.api_key = (
-            api_key or os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("GEMINI_API_KEY")
+            os.getenv("GEMINI_API_KEY")
         )
+        print("Using Gemini API Key:", self.api_key is not None)
         self.model = model
         self.client = None
         self.provider = None
@@ -74,34 +77,9 @@ class AIEngine:
             logger.warning("No API key provided. AI features will be disabled.")
             return
 
-        # Use DeepSeek by default (OpenAI-compatible)
-        if OPENAI_AVAILABLE and self.api_key.startswith("sk-"):
-            try:
-                # Always use DeepSeek API endpoint
-                self.client = openai.OpenAI(
-                    api_key=self.api_key,
-                    base_url="https://api.deepseek.com/v1"
-                )
-                self.provider = "deepseek"
-                logger.info("DeepSeek client initialized successfully")
-                return
-            except Exception as e:
-                logger.error(f"Failed to initialize DeepSeek client: {e}")
-
-        # Try Anthropic
-        if ANTHROPIC_AVAILABLE and self.api_key.startswith("sk-ant-"):
-            try:
-                self.client = anthropic.Anthropic(api_key=self.api_key)
-                self.provider = "anthropic"
-                logger.info("Anthropic client initialized successfully")
-                return
-            except Exception as e:
-                logger.error(f"Failed to initialize Anthropic client: {e}")
-
         if GEMINI_AVAILABLE and self.api_key.startswith("AIza"):
             try:
-                genai.configure(api_key=self.api_key)
-                self.client = genai.GenerativeModel(self.model)
+                self.client = genai.Client(api_key=self.api_key)
                 self.provider = "gemini"
                 logger.info("Gemini client initialized successfully")
                 return
@@ -299,12 +277,8 @@ class AIEngine:
                 return response.content[0].text
 
             elif self.provider == "gemini":
-                response = self.client.generate_content(
-                    contents=[{"role": "user", "parts": [prompt]}],
-                    generation_config={
-                        "max_output_tokens": self.max_tokens,
-                        "temperature": self.temperature,
-                    },
+                response = self.client.models.generate_content(
+                    model=self.model, contents=prompt,
                 )
                 return response.text
 

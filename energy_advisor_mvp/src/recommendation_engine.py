@@ -379,7 +379,7 @@ class RecommendationEngine:
 
         # Initialize AI engine if not provided
         if not self.ai_engine:
-            self.ai_engine = AIEngine(model="gemini-1.5-pro")
+            self.ai_engine = AIEngine(model="gemini-2.5-pro")
 
         if not self.ai_engine.client:
             logger.warning("AI Engine not initialized. Falling back to data-driven recommendations.")
@@ -467,7 +467,7 @@ class RecommendationEngine:
         # Call the AI engine
         logger.info("🤖 Calling OpenAI for AI-powered recommendations...")
         ai_response = self.ai_engine.call_ai_analysis(prompt_template)
-
+        print(ai_response)
         ai_response_json = self.extract_json_from_ai_response(ai_response)
 
         # Return raw AI response (no JSON parsing)
