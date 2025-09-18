@@ -943,7 +943,7 @@ def show_appliance_detection_page():
 
         # Load the model
         with st.spinner("Loading appliance detection model..."):
-            model = joblib.load(get_data_path("model/appliance_prediction_model.pkl"))
+            model = joblib.load(get_data_path("appliance_prediction_model.pkl"))
 
         # Make predictions
         predictions = model.predict(df_model[["power", "power_diff", "rolling_mean_power", "rolling_std_power"]])
@@ -1248,7 +1248,7 @@ def show_appliance_detection_page():
     except Exception as e:
         st.error(f"❌ Error in appliance detection: {str(e)}")
         st.exception(e)
-        
+
 def show_recommendations_page():
     """AI-powered recommendations page"""
     st.header("💡 AI-Powered Energy Saving Recommendations")
